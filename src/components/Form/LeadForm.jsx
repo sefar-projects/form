@@ -50,16 +50,6 @@ function LeadForm() {
 
   useEffect(() => {
     document.title = t.siteTitle
-
-    const existingFavicon = document.querySelector("link[rel='icon']")
-    if (existingFavicon) {
-      existingFavicon.setAttribute('href', logo)
-    } else {
-      const newFavicon = document.createElement('link')
-      newFavicon.rel = 'icon'
-      newFavicon.href = logo
-      document.head.appendChild(newFavicon)
-    }
   }, [t.siteTitle])
 
   useMemo(() => {
