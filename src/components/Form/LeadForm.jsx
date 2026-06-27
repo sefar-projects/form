@@ -280,11 +280,28 @@ function LeadForm() {
             </div>
           </div>
 
-          {!showIntro && !showAccessCode && !showDashboard ? (
-            <div className="rounded-full border border-sky-200 bg-sky-50 px-3 py-2 text-sm font-medium text-sky-700">
-              {t.stepLabel} {step} / 3
-            </div>
-          ) : null}
+          <div className="flex items-center gap-2">
+            {!showDashboard && !showAdmin ? (
+              <button
+                type="button"
+                onClick={() => setShowAdmin(true)}
+                className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-sky-200 bg-white text-sky-700 transition hover:border-sky-300"
+                title={t.adminLoginTitle}
+                aria-label={t.adminLoginTitle}
+              >
+                <svg viewBox="0 0 24 24" fill="none" className="h-5 w-5" aria-hidden="true">
+                  <path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z" stroke="currentColor" strokeWidth="1.8" />
+                  <path d="M4.5 20a7.5 7.5 0 0 1 15 0" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                </svg>
+              </button>
+            ) : null}
+
+            {!showIntro && !showAccessCode && !showDashboard ? (
+              <div className="rounded-full border border-sky-200 bg-sky-50 px-3 py-2 text-sm font-medium text-sky-700">
+                {t.stepLabel} {step} / 3
+              </div>
+            ) : null}
+          </div>
         </div>
 
         {successMessage ? (
@@ -355,13 +372,6 @@ function LeadForm() {
                   className="rounded-full border border-sky-200 bg-white px-5 py-3 text-sm font-semibold text-sky-700 transition hover:border-sky-300"
                 >
                   {t.arabic}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowAdmin(true)}
-                  className="rounded-full border border-sky-200 bg-white px-5 py-3 text-sm font-semibold text-sky-700 transition hover:border-sky-300"
-                >
-                  {t.adminLoginTitle}
                 </button>
               </div>
             </div>
