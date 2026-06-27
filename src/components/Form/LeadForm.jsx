@@ -8,7 +8,7 @@ import logo from '../../assets/logo.png'
 import StepOne from './StepOne'
 import StepTwo from './StepTwo'
 import StepThree from './StepThree'
-import StepFour from './StepFour'
+import StepFour from './StepFour.jsx'
 import AdminLogin from '../Admin/AdminLogin'
 import DashboardPanel from '../Dashboard/DashboardPanel'
 
