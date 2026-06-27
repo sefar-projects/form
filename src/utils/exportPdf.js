@@ -21,6 +21,95 @@ function parseObjectValue(value) {
   }
 }
 
+function pickFirstValue(...values) {
+  for (const value of values) {
+    if (value !== null && value !== undefined && value !== '') {
+      return value
+    }
+  }
+  return ''
+}
+
+function pushRowIfPresent(rows, labelAr, labelEn, value, isArabic) {
+  if (value === null || value === undefined || value === '') return
+  rows.push([isArabic ? labelAr : labelEn, formatValue(value)])
+}
+
+function buildSectionRows(submission, isArabic, countryData) {
+  const meta = countryData._meta || {}
+  const personalMeta = meta.personal || {}
+  const academicMeta = meta.academic || {}
+  const financialMeta = meta.financial || {}
+
+  const fullName = pickFirstValue(
+    submission.name,
+    `${submission.first_name || ''} ${submission.last_name || ''}`.trim(),
+  )
+
+  const personalRows = []
+  const academicRows = []
+  const financialRows = []
+
+  pushRowIfPresent(personalRows, 'الاسم', 'Name', fullName, isArabic)
+  pushRowIfPresent(personalRows, 'البريد الإلكتروني', 'Email', submission.email, isArabic)
+  pushRowIfPresent(personalRows, 'رقم الهاتف', 'Phone', submission.phone_number, isArabic)
+  pushRowIfPresent(personalRows, 'تاريخ الميلاد', 'Date of birth', submission.date_of_birth, isArabic)
+  pushRowIfPresent(personalRows, 'الجنسية', 'Nationality', pickFirstValue(personalMeta.nationality, submission.nationality), isArabic)
+  pushRowIfPresent(personalRows, 'لديه جنسية/إقامة أخرى', 'Has other nationality/residency', personalMeta.hasOtherNationalityOrResidency, isArabic)
+  pushRowIfPresent(personalRows, 'تفاصيل الجنسية/الإقامة الأخرى', 'Other nationality/residency details', personalMeta.otherNationalityOrResidencyDetails, isArabic)
+  pushRowIfPresent(personalRows, 'يملك جواز سفر', 'Has passport', personalMeta.hasPassport, isArabic)
+  pushRowIfPresent(personalRows, 'تاريخ انتهاء الجواز', 'Passport expiry date', personalMeta.passportExpiryDate, isArabic)
+  pushRowIfPresent(personalRows, 'اسم الأب/الأم', 'Parent name', personalMeta.parentName, isArabic)
+  pushRowIfPresent(personalRows, 'هاتف الأب/الأم', 'Parent phone', personalMeta.parentPhone, isArabic)
+  pushRowIfPresent(personalRows, 'رمز الوصول', 'Access code', submission.access_code, isArabic)
+
+  pushRowIfPresent(academicRows, 'نوع الشهادة', 'Degree type', submission.degree_type, isArabic)
+  pushRowIfPresent(academicRows, 'التخصص العام', 'General study field', pickFirstValue(academicMeta.studyField, countryData._meta?.studyField), isArabic)
+  pushRowIfPresent(academicRows, 'المعدل النهائي', 'Final mark', submission.gpa, isArabic)
+  pushRowIfPresent(academicRows, 'مستوى الإنجليزية', 'English level', submission.english_level, isArabic)
+  pushRowIfPresent(academicRows, 'تاريخ آخر شهادة', 'Last degree date', academicMeta.lastDegreeDate, isArabic)
+  pushRowIfPresent(academicRows, 'سنوات الفراغ', 'Gap years', academicMeta.gapYears, isArabic)
+  pushRowIfPresent(academicRows, 'شرح سنوات الفراغ', 'Gap years explanation', academicMeta.gapYearsExplanation, isArabic)
+  pushRowIfPresent(academicRows, 'نوع شهادة اللغة', 'Language certificate type', academicMeta.languageCertificateType, isArabic)
+  pushRowIfPresent(academicRows, 'اسم شهادة اللغة', 'Language certificate name', academicMeta.languageCertificateName, isArabic)
+  pushRowIfPresent(academicRows, 'علامة شهادة اللغة', 'Language certificate score', academicMeta.languageCertificateScore, isArabic)
+  pushRowIfPresent(academicRows, 'تاريخ شهادة اللغة', 'Language certificate date', academicMeta.languageCertificateDate, isArabic)
+  pushRowIfPresent(academicRows, 'درس بالإنجليزية سابقًا', 'Studied in English before', academicMeta.studiedInEnglishBefore, isArabic)
+  pushRowIfPresent(academicRows, 'البلدان المختارة', 'Selected countries', submission.selected_countries, isArabic)
+
+  pushRowIfPresent(financialRows, 'الجهة الممولة', 'Financial sponsor', submission.financial_sponsor, isArabic)
+  pushRowIfPresent(financialRows, 'تفاصيل كفالة الأقارب', 'Relatives sponsorship details', financialMeta.relativesSponsorDetails, isArabic)
+  pushRowIfPresent(financialRows, 'الدخل السنوي للممول', 'Sponsor annual income', financialMeta.annualSponsorIncome, isArabic)
+  pushRowIfPresent(financialRows, 'الحالة المهنية للممول', 'Sponsor employment status', financialMeta.sponsorEmploymentStatus, isArabic)
+  pushRowIfPresent(financialRows, 'نطاق ميزانية الرسوم', 'Tuition budget range', financialMeta.tuitionBudgetRange, isArabic)
+  pushRowIfPresent(financialRows, 'توفر الأموال', 'Funds availability timeline', financialMeta.fundsAvailabilityTimeline, isArabic)
+  pushRowIfPresent(financialRows, 'شرح وضع الأموال', 'Funds explanation', financialMeta.fundsExplanation, isArabic)
+  pushRowIfPresent(financialRows, 'معلومات إضافية', 'Additional information', financialMeta.additionalInfo, isArabic)
+
+  return {
+    personalRows,
+    academicRows,
+    financialRows,
+  }
+}
+
+function renderSectionTable(title, rows, isArabic) {
+  const renderedRows = rows.length > 0
+    ? rows.map(([label, value]) => `<tr><th>${escapeHtml(label)}</th><td>${escapeHtml(value)}</td></tr>`).join('')
+    : `<tr><td colspan="2">${escapeHtml(isArabic ? 'لا توجد بيانات' : 'No data')}</td></tr>`
+
+  return `
+    <section style="margin-bottom:14px;">
+      <h2 style="margin:0 0 8px 0;font-size:14px;color:#0f172a;background:#e2e8f0;padding:8px 10px;border-radius:8px;">${escapeHtml(title)}</h2>
+      <table style="width:100%;border-collapse:collapse;font-size:11px;background:#ffffff;">
+        <tbody>
+          ${renderedRows}
+        </tbody>
+      </table>
+    </section>
+  `
+}
+
 function escapeHtml(value) {
   return String(value)
     .replaceAll('&', '&amp;')
@@ -47,24 +136,7 @@ function getChanceDetails(submission) {
 }
 
 function renderBasicRows(submission, isArabic, countryData) {
-  const rows = [
-    [isArabic ? 'الاسم' : 'Name', formatValue(submission.name || `${submission.first_name || ''} ${submission.last_name || ''}`.trim())],
-    [isArabic ? 'البريد الإلكتروني' : 'Email', formatValue(submission.email)],
-    [isArabic ? 'رقم الهاتف' : 'Phone', formatValue(submission.phone_number)],
-    [isArabic ? 'تاريخ الميلاد' : 'Date of birth', formatValue(submission.date_of_birth)],
-    [isArabic ? 'الجهة الممولة' : 'Financial sponsor', formatValue(submission.financial_sponsor)],
-    [isArabic ? 'نوع الشهادة' : 'Degree type', formatValue(submission.degree_type)],
-    [isArabic ? 'المعدل النهائي' : 'Final mark', formatValue(submission.gpa)],
-    [isArabic ? 'مستوى الإنجليزية' : 'English level', formatValue(submission.english_level)],
-    [isArabic ? 'البلدان المختارة' : 'Selected countries', formatValue(submission.selected_countries)],
-    [isArabic ? 'رمز الوصول' : 'Access code', formatValue(submission.access_code)],
-  ]
-
-  if (countryData._meta?.studyField) {
-    rows.splice(6, 0, [isArabic ? 'التخصص العام' : 'General study field', formatValue(countryData._meta.studyField)])
-  }
-
-  return rows
+  return buildSectionRows(submission, isArabic, countryData)
 }
 
 function renderCountryTableRows(countryData, t) {
@@ -131,9 +203,12 @@ export async function exportSubmissionPdf(submission, language = 'en') {
   const countryData = parseObjectValue(submission.country_specific_data)
   const scoreData = getChanceDetails(submission)
 
-  const basicRowsHtml = renderBasicRows(submission, isArabic, countryData)
-    .map(([label, value]) => `<tr><th>${escapeHtml(label)}</th><td>${escapeHtml(value)}</td></tr>`)
-    .join('')
+  const sectionRows = renderBasicRows(submission, isArabic, countryData)
+  const sectionTablesHtml = [
+    renderSectionTable(isArabic ? 'البيانات الشخصية' : 'Personal details', sectionRows.personalRows, isArabic),
+    renderSectionTable(isArabic ? 'البيانات الأكاديمية' : 'Academic details', sectionRows.academicRows, isArabic),
+    renderSectionTable(isArabic ? 'البيانات المالية' : 'Financial details', sectionRows.financialRows, isArabic),
+  ].join('')
 
   const countryRows = renderCountryTableRows(countryData, t)
   const countryRowsHtml = countryRows
@@ -159,18 +234,14 @@ export async function exportSubmissionPdf(submission, language = 'en') {
   wrapper.dir = isArabic ? 'rtl' : 'ltr'
 
   wrapper.innerHTML = `
-    <div style="border:1px solid #e2e8f0;border-radius:14px;padding:20px;">
-      <h1 style="margin:0 0 4px 0;font-size:24px;">${escapeHtml(title)}</h1>
+    <div style="border:1px solid #e2e8f0;border-radius:14px;padding:20px;background:#f8fafc;">
+      <h1 style="margin:0 0 4px 0;font-size:24px;color:#0f172a;">${escapeHtml(title)}</h1>
       <p style="margin:0 0 16px 0;font-size:13px;color:#475569;">${escapeHtml(subtitle)}</p>
 
-      <table style="width:100%;border-collapse:collapse;margin-bottom:18px;font-size:12px;">
-        <tbody>
-          ${basicRowsHtml}
-        </tbody>
-      </table>
+      ${sectionTablesHtml}
 
       <h2 style="font-size:16px;margin:16px 0 8px 0;">${escapeHtml(isArabic ? 'جدول بيانات الدول' : 'Country-specific details')}</h2>
-      <table style="width:100%;border-collapse:collapse;margin-bottom:18px;font-size:11px;">
+      <table style="width:100%;border-collapse:collapse;margin-bottom:18px;font-size:11px;background:#ffffff;">
         <thead>
           <tr>
             <th style="text-align:left;">${escapeHtml(isArabic ? 'الدولة' : 'Country')}</th>
@@ -184,7 +255,7 @@ export async function exportSubmissionPdf(submission, language = 'en') {
       </table>
 
       <h2 style="font-size:16px;margin:16px 0 8px 0;">${escapeHtml(isArabic ? 'نتائج نسبة القبول مع التفاصيل' : 'Chance calculator results with details')}</h2>
-      <table style="width:100%;border-collapse:collapse;font-size:11px;">
+      <table style="width:100%;border-collapse:collapse;font-size:11px;background:#ffffff;">
         <thead>
           <tr>
             <th style="text-align:left;">${escapeHtml(isArabic ? 'الدولة' : 'Country')}</th>
