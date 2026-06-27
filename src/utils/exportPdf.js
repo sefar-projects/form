@@ -1,0 +1,243 @@
+import { jsPDF } from 'jspdf'
+import html2canvas from 'html2canvas'
+import { calculateChances } from './chancesCalculator'
+import { translations } from '../i18n/translations'
+
+function formatValue(value) {
+  if (value === null || value === undefined || value === '') return '—'
+  if (Array.isArray(value)) return value.join(', ')
+  if (typeof value === 'object') return JSON.stringify(value)
+  return String(value)
+}
+
+function parseObjectValue(value) {
+  if (!value) return {}
+  if (typeof value === 'object') return value
+
+  try {
+    return JSON.parse(value)
+  } catch {
+    return {}
+  }
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;')
+}
+
+function getChanceDetails(submission) {
+  const stored = parseObjectValue(submission.agency_internal_score)
+  const hasDetails = Object.values(stored).some((item) => item && typeof item === 'object' && 'percentage' in item)
+
+  if (hasDetails) {
+    return stored
+  }
+
+  return calculateChances(
+    submission.gpa,
+    submission.english_level,
+    submission.selected_countries || [],
+    submission.degree_type,
+  )
+}
+
+function renderBasicRows(submission, isArabic, countryData) {
+  const rows = [
+    [isArabic ? 'الاسم' : 'Name', formatValue(submission.name || `${submission.first_name || ''} ${submission.last_name || ''}`.trim())],
+    [isArabic ? 'البريد الإلكتروني' : 'Email', formatValue(submission.email)],
+    [isArabic ? 'رقم الهاتف' : 'Phone', formatValue(submission.phone_number)],
+    [isArabic ? 'تاريخ الميلاد' : 'Date of birth', formatValue(submission.date_of_birth)],
+    [isArabic ? 'الجهة الممولة' : 'Financial sponsor', formatValue(submission.financial_sponsor)],
+    [isArabic ? 'نوع الشهادة' : 'Degree type', formatValue(submission.degree_type)],
+    [isArabic ? 'المعدل النهائي' : 'Final mark', formatValue(submission.gpa)],
+    [isArabic ? 'مستوى الإنجليزية' : 'English level', formatValue(submission.english_level)],
+    [isArabic ? 'البلدان المختارة' : 'Selected countries', formatValue(submission.selected_countries)],
+    [isArabic ? 'رمز الوصول' : 'Access code', formatValue(submission.access_code)],
+  ]
+
+  if (countryData._meta?.studyField) {
+    rows.splice(6, 0, [isArabic ? 'التخصص العام' : 'General study field', formatValue(countryData._meta.studyField)])
+  }
+
+  return rows
+}
+
+function renderCountryTableRows(countryData, t) {
+  const rows = []
+
+  Object.entries(countryData).forEach(([countryKey, answers]) => {
+    if (countryKey === '_meta') return
+
+    Object.entries(answers || {}).forEach(([fieldId, answer]) => {
+      rows.push([
+        t.countryNames?.[countryKey] || countryKey,
+        t.countryFieldLabels?.[fieldId] || (fieldId === 'intendedStudyField' ? t.intendedStudyFieldLabel : fieldId),
+        formatValue(answer),
+      ])
+    })
+  })
+
+  return rows
+}
+
+function renderChanceRows(scoreData, t, isArabic) {
+  const rows = []
+
+  Object.entries(scoreData).forEach(([countryKey, result]) => {
+    const countryName = t.countryNames?.[countryKey] || countryKey
+    const percentage = typeof result === 'object' ? result.percentage : result
+
+    let explanation = 'Legacy score record'
+    if (typeof result === 'object' && result.breakdown) {
+      const b = result.breakdown
+      explanation = [
+        `Base ${b.baseScore}`,
+        `Mark +${b.finalMarkContribution}`,
+        `Language +${b.languageContribution}`,
+        `Degree +${b.degreeContribution}`,
+        `Penalty -${b.minimumMarkPenalty}`,
+        `Minimum ${b.minimumRequiredMark}/20`,
+      ].join(' | ')
+
+      if (isArabic) {
+        explanation = [
+          `الأساس ${b.baseScore}`,
+          `المعدل +${b.finalMarkContribution}`,
+          `اللغة +${b.languageContribution}`,
+          `الشهادة +${b.degreeContribution}`,
+          `الخصم -${b.minimumMarkPenalty}`,
+          `الحد الأدنى ${b.minimumRequiredMark}/20`,
+        ].join(' | ')
+      }
+    }
+
+    rows.push([countryName, `${percentage}%`, explanation])
+  })
+
+  return rows
+}
+
+export async function exportSubmissionPdf(submission, language = 'en') {
+  const isArabic = language === 'ar'
+  const t = translations[language] || translations.en
+  const title = isArabic ? 'تفاصيل الطلب' : 'Submission details'
+  const subtitle = isArabic ? 'نموذج دراسة سيفار' : 'Sefar study form'
+
+  const countryData = parseObjectValue(submission.country_specific_data)
+  const scoreData = getChanceDetails(submission)
+
+  const basicRowsHtml = renderBasicRows(submission, isArabic, countryData)
+    .map(([label, value]) => `<tr><th>${escapeHtml(label)}</th><td>${escapeHtml(value)}</td></tr>`)
+    .join('')
+
+  const countryRows = renderCountryTableRows(countryData, t)
+  const countryRowsHtml = countryRows
+    .map(([country, field, value]) => `<tr><td>${escapeHtml(country)}</td><td>${escapeHtml(field)}</td><td>${escapeHtml(value)}</td></tr>`)
+    .join('')
+
+  const chanceRows = renderChanceRows(scoreData, t, isArabic)
+  const chanceRowsHtml = chanceRows
+    .map(([country, chance, details]) => `<tr><td>${escapeHtml(country)}</td><td>${escapeHtml(chance)}</td><td>${escapeHtml(details)}</td></tr>`)
+    .join('')
+
+  const wrapper = document.createElement('div')
+  wrapper.style.position = 'fixed'
+  wrapper.style.left = '0'
+  wrapper.style.top = '0'
+  wrapper.style.width = '900px'
+  wrapper.style.background = '#ffffff'
+  wrapper.style.padding = '24px'
+  wrapper.style.color = '#0f172a'
+  wrapper.style.fontFamily = 'Arial, Tahoma, sans-serif'
+  wrapper.style.zIndex = '-1'
+  wrapper.style.pointerEvents = 'none'
+  wrapper.dir = isArabic ? 'rtl' : 'ltr'
+
+  wrapper.innerHTML = `
+    <div style="border:1px solid #e2e8f0;border-radius:14px;padding:20px;">
+      <h1 style="margin:0 0 4px 0;font-size:24px;">${escapeHtml(title)}</h1>
+      <p style="margin:0 0 16px 0;font-size:13px;color:#475569;">${escapeHtml(subtitle)}</p>
+
+      <table style="width:100%;border-collapse:collapse;margin-bottom:18px;font-size:12px;">
+        <tbody>
+          ${basicRowsHtml}
+        </tbody>
+      </table>
+
+      <h2 style="font-size:16px;margin:16px 0 8px 0;">${escapeHtml(isArabic ? 'جدول بيانات الدول' : 'Country-specific details')}</h2>
+      <table style="width:100%;border-collapse:collapse;margin-bottom:18px;font-size:11px;">
+        <thead>
+          <tr>
+            <th style="text-align:left;">${escapeHtml(isArabic ? 'الدولة' : 'Country')}</th>
+            <th style="text-align:left;">${escapeHtml(isArabic ? 'الحقل' : 'Field')}</th>
+            <th style="text-align:left;">${escapeHtml(isArabic ? 'القيمة' : 'Value')}</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${countryRowsHtml || `<tr><td colspan="3">${escapeHtml(isArabic ? 'لا توجد بيانات' : 'No data')}</td></tr>`}
+        </tbody>
+      </table>
+
+      <h2 style="font-size:16px;margin:16px 0 8px 0;">${escapeHtml(isArabic ? 'نتائج نسبة القبول مع التفاصيل' : 'Chance calculator results with details')}</h2>
+      <table style="width:100%;border-collapse:collapse;font-size:11px;">
+        <thead>
+          <tr>
+            <th style="text-align:left;">${escapeHtml(isArabic ? 'الدولة' : 'Country')}</th>
+            <th style="text-align:left;">${escapeHtml(isArabic ? 'النسبة' : 'Chance')}</th>
+            <th style="text-align:left;">${escapeHtml(isArabic ? 'سبب النتيجة' : 'Why this score')}</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${chanceRowsHtml || `<tr><td colspan="3">${escapeHtml(isArabic ? 'لا توجد بيانات' : 'No data')}</td></tr>`}
+        </tbody>
+      </table>
+    </div>
+  `
+
+  wrapper.querySelectorAll('th, td').forEach((cell) => {
+    cell.style.border = '1px solid #e2e8f0'
+    cell.style.padding = '6px'
+    cell.style.verticalAlign = 'top'
+  })
+
+  document.body.appendChild(wrapper)
+
+  try {
+    const canvas = await html2canvas(wrapper, {
+      backgroundColor: '#ffffff',
+      scale: 2,
+      useCORS: true,
+    })
+
+    const imageData = canvas.toDataURL('image/png')
+    const doc = new jsPDF({ unit: 'pt', format: 'a4', orientation: 'portrait' })
+    const pageWidth = doc.internal.pageSize.getWidth()
+    const pageHeight = doc.internal.pageSize.getHeight()
+    const margin = 16
+    const printableWidth = pageWidth - margin * 2
+    const printableHeight = pageHeight - margin * 2
+    const imageHeight = (canvas.height * printableWidth) / canvas.width
+
+    let renderedHeight = imageHeight
+    let positionY = margin
+
+    doc.addImage(imageData, 'PNG', margin, positionY, printableWidth, imageHeight)
+    renderedHeight -= printableHeight
+
+    while (renderedHeight > 0) {
+      positionY -= printableHeight
+      doc.addPage()
+      doc.addImage(imageData, 'PNG', margin, positionY, printableWidth, imageHeight)
+      renderedHeight -= printableHeight
+    }
+
+    doc.save(`submission-${submission.id || 'download'}.pdf`)
+  } finally {
+    document.body.removeChild(wrapper)
+  }
+}
