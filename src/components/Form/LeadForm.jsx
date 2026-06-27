@@ -8,6 +8,7 @@ import logo from '../../assets/logo.png'
 import StepOne from './StepOne'
 import StepTwo from './StepTwo'
 import StepThree from './StepThree'
+import StepFour from './StepFour'
 import AdminLogin from '../Admin/AdminLogin'
 import DashboardPanel from '../Dashboard/DashboardPanel'
 
@@ -17,14 +18,38 @@ const initialValues = {
   email: '',
   phone: '',
   dob: '',
-  sponsor: '',
+  nationality: '',
+  hasOtherNationalityOrResidency: '',
+  otherNationalityOrResidencyDetails: '',
+  hasPassport: '',
+  passportExpiryDate: '',
+  parentName: '',
+  parentPhone: '',
+
   degreeType: '',
   studyField: '',
   finalMark: '',
+  lastDegreeDate: '',
+  gapYears: '',
+  gapYearsExplanation: '',
   englishLevel: '',
-  englishExamScore: '',
+  languageCertificateType: '',
+  languageCertificateName: '',
+  languageCertificateScore: '',
+  languageCertificateDate: '',
+  studiedInEnglishBefore: '',
+
   selectedCountries: [],
   dynamicAnswers: {},
+
+  financialSponsor: '',
+  relativesSponsorDetails: '',
+  annualSponsorIncome: '',
+  sponsorEmploymentStatus: '',
+  tuitionBudgetRange: '',
+  fundsAvailabilityTimeline: '',
+  fundsExplanation: '',
+  additionalInfo: '',
 }
 
 function LeadForm() {
@@ -45,9 +70,17 @@ function LeadForm() {
 
   const t = translations[language] || translations.en
   const normalizedAccessCode = `${accessCode}`.trim().toUpperCase().replaceAll(/\s+/g, '')
-  const englishLevelForScoring = values.englishLevel === 'IELTS/TOEFL holder' && values.englishExamScore
-    ? `IELTS ${values.englishExamScore}`
-    : values.englishLevel
+
+  const englishLevelForScoring = useMemo(() => {
+    if (
+      (values.languageCertificateType === 'IELTS' || values.languageCertificateType === 'TOEFL')
+      && values.languageCertificateScore
+    ) {
+      return `${values.languageCertificateType} ${values.languageCertificateScore}`
+    }
+
+    return values.englishLevel
+  }, [values.languageCertificateType, values.languageCertificateScore, values.englishLevel])
 
   useEffect(() => {
     document.title = t.siteTitle
@@ -118,42 +151,40 @@ function LeadForm() {
       setStep(1)
       setError('')
       setStepErrors({})
-    } catch (error) {
-      setAccessCodeError(error.message || t.accessCodeError)
+    } catch (accessError) {
+      setAccessCodeError(accessError.message || t.accessCodeError)
     }
   }
 
   const handleStepOneNext = () => {
     const errors = {}
 
-    if (!values.firstName.trim()) {
-      errors.firstName = t.validation.firstName
-    }
+    if (!values.firstName.trim()) errors.firstName = t.validation.firstName
+    if (!values.lastName.trim()) errors.lastName = t.validation.lastName
 
-    if (!values.lastName.trim()) {
-      errors.lastName = t.validation.lastName
-    }
-
-    if (!values.email.trim()) {
-      errors.email = t.validation.email
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values.email)) {
+    if (!values.email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values.email)) {
       errors.email = t.validation.email
     }
 
-    if (!values.phone.trim()) {
-      errors.phone = t.validation.phone
+    if (!values.phone.trim()) errors.phone = t.validation.phone
+    if (!values.dob) errors.dob = t.validation.dob
+    if (!values.nationality.trim()) errors.nationality = t.validation.nationality
+    if (!values.hasOtherNationalityOrResidency) errors.hasOtherNationalityOrResidency = t.validation.hasOtherNationalityOrResidency
+
+    if (values.hasOtherNationalityOrResidency === 'Yes' && !values.otherNationalityOrResidencyDetails.trim()) {
+      errors.otherNationalityOrResidencyDetails = t.validation.otherNationalityOrResidencyDetails
     }
 
-    if (!values.dob) {
-      errors.dob = t.validation.dob
+    if (!values.hasPassport) errors.hasPassport = t.validation.hasPassport
+
+    if (values.hasPassport === 'Yes' && !values.passportExpiryDate) {
+      errors.passportExpiryDate = t.validation.passportExpiryDate
     }
 
-    if (!values.sponsor) {
-      errors.sponsor = t.validation.sponsor
-    }
+    if (!values.parentName.trim()) errors.parentName = t.validation.parentName
+    if (!values.parentPhone.trim()) errors.parentPhone = t.validation.parentPhone
 
     setStepErrors(errors)
-
     if (Object.keys(errors).length > 0) {
       setError(t.validation.generic)
       return
@@ -175,45 +206,88 @@ function LeadForm() {
     setStepErrors({})
   }
 
-  const handleSubmit = async () => {
+  const handleStepThreeNext = () => {
     const errors = {}
 
-    if (!values.degreeType.trim()) {
-      errors.degreeType = t.validation.degreeType
+    if (!values.degreeType.trim()) errors.degreeType = t.validation.degreeType
+    if (!values.studyField.trim()) errors.studyField = t.validation.studyField
+    if (!values.finalMark) errors.finalMark = t.validation.finalMark
+    if (!values.lastDegreeDate) errors.lastDegreeDate = t.validation.lastDegreeDate
+    if (!values.gapYears) errors.gapYears = t.validation.gapYears
+
+    if (values.gapYears === 'Two years or more' && !values.gapYearsExplanation.trim()) {
+      errors.gapYearsExplanation = t.validation.gapYearsExplanation
     }
 
-    if (!values.studyField.trim()) {
-      errors.studyField = t.validation.studyField
+    if (!values.englishLevel) errors.englishLevel = t.validation.english
+    if (!values.languageCertificateType) errors.languageCertificateType = t.validation.languageCertificateType
+
+    if (values.languageCertificateType !== 'None') {
+      if (!values.languageCertificateScore.trim()) errors.languageCertificateScore = t.validation.languageCertificateScore
+      if (!values.languageCertificateDate) errors.languageCertificateDate = t.validation.languageCertificateDate
     }
 
-    if (!values.finalMark) {
-      errors.finalMark = t.validation.finalMark
+    if (values.languageCertificateType === 'Other' && !values.languageCertificateName.trim()) {
+      errors.languageCertificateName = t.validation.languageCertificateName
     }
 
-    if (!values.englishLevel) {
-      errors.englishLevel = t.validation.english
-    }
-
-    if (values.englishLevel === 'IELTS/TOEFL holder' && !values.englishExamScore.trim()) {
-      errors.englishExamScore = t.validation.englishExamScore
-    }
+    if (!values.studiedInEnglishBefore) errors.studiedInEnglishBefore = t.validation.studiedInEnglishBefore
 
     values.selectedCountries.forEach((countryName) => {
       const countryConfig = values.dynamicAnswers[countryName] || {}
-      ;(countriesConfig[countryName]?.dynamicFields || []).forEach((field) => {
-        const value = countryConfig[field.id]
-        if (!value) {
-          errors[`${countryName}.${field.id}`] = t.validation.dynamic
+
+      const requiredCountryFields = [
+        'desiredLevel',
+        'specialization1',
+        'universityType',
+        'housingPreference',
+        'studyStartYear',
+        'rankingInterest',
+        'scholarshipInterest',
+      ]
+
+      requiredCountryFields.forEach((fieldKey) => {
+        if (!countryConfig[fieldKey]?.trim()) {
+          errors[`${countryName}.${fieldKey}`] = t.validation.dynamic
         }
       })
 
-      if (!countryConfig.intendedStudyField?.trim()) {
-        errors[`${countryName}.intendedStudyField`] = t.validation.dynamic
-      }
+      ;(countriesConfig[countryName]?.dynamicFields || []).forEach((field) => {
+        const fieldValue = countryConfig[field.id]
+        if (!fieldValue) {
+          errors[`${countryName}.${field.id}`] = t.validation.dynamic
+        }
+      })
     })
 
     setStepErrors(errors)
+    if (Object.keys(errors).length > 0) {
+      setError(t.validation.dynamic)
+      return
+    }
 
+    setStep(4)
+    setError('')
+  }
+
+  const handleSubmit = async () => {
+    const errors = {}
+
+    if (!values.financialSponsor) errors.financialSponsor = t.validation.financialSponsor
+    if (values.financialSponsor === 'Relatives' && !values.relativesSponsorDetails.trim()) {
+      errors.relativesSponsorDetails = t.validation.relativesSponsorDetails
+    }
+
+    if (!values.annualSponsorIncome.trim()) errors.annualSponsorIncome = t.validation.annualSponsorIncome
+    if (!values.sponsorEmploymentStatus) errors.sponsorEmploymentStatus = t.validation.sponsorEmploymentStatus
+    if (!values.tuitionBudgetRange) errors.tuitionBudgetRange = t.validation.tuitionBudgetRange
+    if (!values.fundsAvailabilityTimeline) errors.fundsAvailabilityTimeline = t.validation.fundsAvailabilityTimeline
+
+    if (values.fundsAvailabilityTimeline === 'No' && !values.fundsExplanation.trim()) {
+      errors.fundsExplanation = t.validation.fundsExplanation
+    }
+
+    setStepErrors(errors)
     if (Object.keys(errors).length > 0) {
       setError(t.validation.dynamic)
       return
@@ -227,9 +301,40 @@ function LeadForm() {
       const countrySpecificData = {
         ...values.dynamicAnswers,
         _meta: {
-          studyField: values.studyField,
+          personal: {
+            nationality: values.nationality,
+            hasOtherNationalityOrResidency: values.hasOtherNationalityOrResidency,
+            otherNationalityOrResidencyDetails: values.otherNationalityOrResidencyDetails,
+            hasPassport: values.hasPassport,
+            passportExpiryDate: values.passportExpiryDate,
+            parentName: values.parentName,
+            parentPhone: values.parentPhone,
+          },
+          academic: {
+            studyField: values.studyField,
+            lastDegreeDate: values.lastDegreeDate,
+            gapYears: values.gapYears,
+            gapYearsExplanation: values.gapYearsExplanation,
+            languageCertificateType: values.languageCertificateType,
+            languageCertificateName: values.languageCertificateName,
+            languageCertificateScore: values.languageCertificateScore,
+            languageCertificateDate: values.languageCertificateDate,
+            studiedInEnglishBefore: values.studiedInEnglishBefore,
+          },
+          financial: {
+            sponsor: values.financialSponsor,
+            relativesSponsorDetails: values.relativesSponsorDetails,
+            annualSponsorIncome: values.annualSponsorIncome,
+            sponsorEmploymentStatus: values.sponsorEmploymentStatus,
+            tuitionBudgetRange: values.tuitionBudgetRange,
+            fundsAvailabilityTimeline: values.fundsAvailabilityTimeline,
+            fundsExplanation: values.fundsExplanation,
+            additionalInfo: values.additionalInfo,
+          },
         },
       }
+
+      const scorePayload = calculateChances(values.finalMark, englishLevelForScoring, values.selectedCountries, values.degreeType)
 
       const createdLead = await submitLead({
         firstName: values.firstName,
@@ -237,13 +342,14 @@ function LeadForm() {
         email: values.email,
         phone: values.phone,
         dob: values.dob,
-        sponsor: values.sponsor,
+        sponsor: values.financialSponsor,
+        budget: values.tuitionBudgetRange,
         degreeType: values.degreeType,
         studyField: values.studyField,
         finalMark: values.finalMark,
         englishLevel: englishLevelForScoring,
         selectedCountries: values.selectedCountries,
-        agencyInternalScore: calculateChances(values.finalMark, englishLevelForScoring, values.selectedCountries, values.degreeType),
+        agencyInternalScore: scorePayload,
         countrySpecificData,
         accessCode: normalizedAccessCode,
       })
@@ -298,7 +404,7 @@ function LeadForm() {
 
             {!showIntro && !showAccessCode && !showDashboard ? (
               <div className="rounded-full border border-sky-200 bg-sky-50 px-3 py-2 text-sm font-medium text-sky-700">
-                {t.stepLabel} {step} / 3
+                {t.stepLabel} {step} / 4
               </div>
             ) : null}
           </div>
@@ -429,6 +535,18 @@ function LeadForm() {
             onChange={updateField}
             onDynamicChange={updateDynamicAnswer}
             onBack={() => setStep(2)}
+            onNext={handleStepThreeNext}
+            error={error}
+            errors={stepErrors}
+            t={t}
+          />
+        ) : null}
+
+        {!isCompleted && !showIntro && !showAccessCode && step === 4 ? (
+          <StepFour
+            values={values}
+            onChange={updateField}
+            onBack={() => setStep(3)}
             onSubmit={handleSubmit}
             error={error}
             errors={stepErrors}
