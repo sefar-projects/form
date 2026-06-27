@@ -44,6 +44,7 @@ function LeadForm() {
   const [isCompleted, setIsCompleted] = useState(false)
 
   const t = translations[language] || translations.en
+  const normalizedAccessCode = `${accessCode}`.trim().toUpperCase().replaceAll(/\s+/g, '')
   const englishLevelForScoring = values.englishLevel === 'IELTS/TOEFL holder' && values.englishExamScore
     ? `IELTS ${values.englishExamScore}`
     : values.englishLevel
@@ -106,13 +107,12 @@ function LeadForm() {
     setAccessCodeError('')
 
     try {
-      const codeRow = await getAccessCodeByValue(accessCode.trim())
+      const codeRow = await getAccessCodeByValue(normalizedAccessCode)
       if (!codeRow || codeRow.used) {
         setAccessCodeError(t.accessCodeError)
         return
       }
 
-      await consumeAccessCode(accessCode.trim(), null)
       setShowAccessCode(false)
       setShowIntro(false)
       setStep(1)
@@ -231,7 +231,7 @@ function LeadForm() {
         },
       }
 
-      await submitLead({
+      const createdLead = await submitLead({
         firstName: values.firstName,
         lastName: values.lastName,
         email: values.email,
@@ -245,8 +245,13 @@ function LeadForm() {
         selectedCountries: values.selectedCountries,
         agencyInternalScore: calculateChances(values.finalMark, englishLevelForScoring, values.selectedCountries, values.degreeType),
         countrySpecificData,
-        accessCode,
+        accessCode: normalizedAccessCode,
       })
+
+      const consumed = await consumeAccessCode(normalizedAccessCode, createdLead?.id || null)
+      if (!consumed) {
+        throw new Error(t.accessCodeError)
+      }
 
       setSuccessMessage(t.submissionSuccess)
       setValues(initialValues)

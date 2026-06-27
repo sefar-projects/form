@@ -1,12 +1,17 @@
 import { supabase } from '../lib/supabase'
 
+function normalizeAccessCode(code = '') {
+  return `${code}`.trim().toUpperCase().replaceAll(/\s+/g, '')
+}
+
 export async function getAccessCodeByValue(code) {
   if (!supabase) throw new Error('Supabase is not configured.')
+  const normalizedCode = normalizeAccessCode(code)
 
   const { data, error } = await supabase
     .from('access_codes')
     .select('*')
-    .eq('code', code)
+    .eq('code', normalizedCode)
     .maybeSingle()
 
   if (error) throw error
@@ -15,20 +20,23 @@ export async function getAccessCodeByValue(code) {
 
 export async function consumeAccessCode(code, leadId) {
   if (!supabase) throw new Error('Supabase is not configured.')
+  const normalizedCode = normalizeAccessCode(code)
 
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('access_codes')
     .update({ used: true, used_at: new Date().toISOString(), lead_id: leadId })
-    .eq('code', code)
+    .eq('code', normalizedCode)
     .is('used', false)
+    .select('id')
 
   if (error) throw error
+  return (data || []).length > 0
 }
 
 export async function createAccessCode(customerName) {
   if (!supabase) throw new Error('Supabase is not configured.')
 
-  const code = Math.random().toString(36).slice(2, 10).toUpperCase()
+  const code = normalizeAccessCode(Math.random().toString(36).slice(2, 10))
 
   const { data, error } = await supabase
     .from('access_codes')
