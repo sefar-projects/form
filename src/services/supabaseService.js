@@ -23,11 +23,11 @@ export async function submitLead(leadData) {
     access_code: leadData.accessCode || null,
   }
 
-  const { data, error } = await supabase.from('leads').insert([payload]).select().single()
+  const { error } = await supabase.from('leads').insert([payload], { returning: 'minimal' })
 
   if (error) {
     throw error
   }
 
-  return data
+  return true
 }

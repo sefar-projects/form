@@ -336,7 +336,7 @@ function LeadForm() {
 
       const scorePayload = calculateChances(values.finalMark, englishLevelForScoring, values.selectedCountries, values.degreeType)
 
-      const createdLead = await submitLead({
+      await submitLead({
         firstName: values.firstName,
         lastName: values.lastName,
         email: values.email,
@@ -354,7 +354,7 @@ function LeadForm() {
         accessCode: normalizedAccessCode,
       })
 
-      const consumed = await consumeAccessCode(normalizedAccessCode, createdLead?.id || null)
+      const consumed = await consumeAccessCode(normalizedAccessCode)
       if (!consumed) {
         throw new Error(t.accessCodeError)
       }
