@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { countriesConfig } from '../../config/countriesConfig'
 import { getAccessCodeByValue, consumeAccessCode } from '../../services/accessCodeService'
-import { submitLead } from '../../services/supabaseService'
+import { evaluateStudyPath, fetchUniversityCriteria, submitLead } from '../../services/supabaseService'
 import { calculateChances } from '../../utils/chancesCalculator'
 import { translations } from '../../i18n/translations'
 import logo from '../../assets/logo.png'
@@ -65,8 +65,10 @@ function LeadForm() {
   const [error, setError] = useState('')
   const [stepErrors, setStepErrors] = useState({})
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [submissionStatus, setSubmissionStatus] = useState('')
   const [successMessage, setSuccessMessage] = useState('')
   const [isCompleted, setIsCompleted] = useState(false)
+  const [universityRules, setUniversityRules] = useState([])
 
   const t = translations[language] || translations.en
   const normalizedAccessCode = `${accessCode}`.trim().toUpperCase().replaceAll(/\s+/g, '')
@@ -86,9 +88,18 @@ function LeadForm() {
     document.title = t.siteTitle
   }, [t.siteTitle])
 
-  useMemo(() => {
-    calculateChances(values.finalMark, englishLevelForScoring, values.selectedCountries, values.degreeType)
-  }, [values.finalMark, englishLevelForScoring, values.selectedCountries, values.degreeType])
+  useEffect(() => {
+    const loadUniversityRules = async () => {
+      try {
+        const rows = await fetchUniversityCriteria()
+        setUniversityRules(rows)
+      } catch {
+        setUniversityRules([])
+      }
+    }
+
+    loadUniversityRules()
+  }, [])
 
   const updateField = (field, value) => {
     setValues((current) => ({ ...current, [field]: value }))
@@ -295,6 +306,7 @@ function LeadForm() {
 
     setError('')
     setSuccessMessage('')
+    setSubmissionStatus('Analyzing profile and evaluating study path logic...')
     setIsSubmitting(true)
 
     try {
@@ -334,7 +346,35 @@ function LeadForm() {
         },
       }
 
-      const scorePayload = calculateChances(values.finalMark, englishLevelForScoring, values.selectedCountries, values.degreeType)
+      const firstCountry = values.selectedCountries[0]
+      const firstCountryAnswers = values.dynamicAnswers[firstCountry] || {}
+      const targetDegree = `${firstCountryAnswers.desiredLevel || values.degreeType || ''} ${firstCountryAnswers.specialization1 || values.studyField || ''}`.trim()
+      const previousDegree = `${values.degreeType || 'Previous degree'} in ${values.studyField || 'Unknown field'}`
+
+      const aiResult = await evaluateStudyPath(previousDegree, targetDegree)
+
+      countrySpecificData._meta.studyPath = {
+        previousDegree,
+        targetDegree,
+        score: aiResult.relevance_score,
+        reasoning: aiResult.reasoning,
+      }
+
+      const scorePayload = calculateChances(
+        {
+          gpa: values.finalMark,
+          english_level: englishLevelForScoring,
+          selected_countries: values.selectedCountries,
+          degree_type: values.degreeType,
+          budget_availability: values.tuitionBudgetRange,
+          date_of_birth: values.dob,
+          last_degree_date: values.lastDegreeDate,
+          studied_in_english_before: values.studiedInEnglishBefore,
+          country_specific_data: countrySpecificData,
+        },
+        universityRules,
+        aiResult.relevance_score,
+      )
 
       await submitLead({
         firstName: values.firstName,
@@ -350,6 +390,8 @@ function LeadForm() {
         englishLevel: englishLevelForScoring,
         selectedCountries: values.selectedCountries,
         agencyInternalScore: scorePayload,
+        studyPathScore: aiResult.relevance_score,
+        studyPathExplanation: aiResult.reasoning,
         countrySpecificData,
         accessCode: normalizedAccessCode,
       })
@@ -360,11 +402,13 @@ function LeadForm() {
       }
 
       setSuccessMessage(t.submissionSuccess)
+      setSubmissionStatus('')
       setValues(initialValues)
       setIsCompleted(true)
       setStepErrors({})
     } catch (submissionError) {
       setError(submissionError.message || 'Unable to submit the lead right now.')
+      setSubmissionStatus('')
     } finally {
       setIsSubmitting(false)
     }
@@ -413,6 +457,12 @@ function LeadForm() {
         {successMessage ? (
           <div className="mb-6 rounded-2xl border border-emerald-500/30 bg-emerald-50 p-4 text-sm text-emerald-700">
             {successMessage}
+          </div>
+        ) : null}
+
+        {isSubmitting && submissionStatus ? (
+          <div className="mb-6 rounded-2xl border border-sky-200 bg-sky-50 p-4 text-sm text-sky-700">
+            {submissionStatus}
           </div>
         ) : null}
 

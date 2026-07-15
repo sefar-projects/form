@@ -11,6 +11,7 @@ function DashboardPanel({ language = 'en', onBack, onLogout }) {
   const [submissions, setSubmissions] = useState([])
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState('')
+  const [selectedSubmissionId, setSelectedSubmissionId] = useState(null)
 
   const loadData = async () => {
     const rows = await getAccessCodes()
@@ -50,6 +51,14 @@ function DashboardPanel({ language = 'en', onBack, onLogout }) {
 
   const exportPdf = () => {
     window.print()
+  }
+
+  const getStudyPathBadgeClass = (score) => {
+    const numericScore = Number(score)
+    if (!Number.isFinite(numericScore)) return 'bg-slate-100 text-slate-700'
+    if (numericScore >= 7) return 'bg-emerald-100 text-emerald-700'
+    if (numericScore >= 5) return 'bg-amber-100 text-amber-700'
+    return 'bg-rose-100 text-rose-700'
   }
 
   const usedSubmissions = useMemo(() => submissions.filter((row) => row.access_code), [submissions])
@@ -129,11 +138,33 @@ function DashboardPanel({ language = 'en', onBack, onLogout }) {
                       <p className="text-sm font-semibold text-slate-800">{row.name || `${row.first_name || ''} ${row.last_name || ''}`.trim() || '—'}</p>
                       <p className="text-xs text-slate-500">{row.email || '—'} • {row.access_code || '—'}</p>
                       <p className="mt-2 text-xs text-slate-500">{row.selected_countries?.join(', ') || '—'}</p>
+                      <div className="mt-2 flex items-center gap-2">
+                        <span className="text-xs text-slate-500">Study path score:</span>
+                        <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${getStudyPathBadgeClass(row.study_path_score)}`}>
+                          {row.study_path_score ?? 'N/A'}
+                        </span>
+                      </div>
                     </div>
-                    <button type="button" onClick={() => exportSubmissionPdf(row, language)} className="text-sm font-semibold text-sky-700">
-                      {t.exportPdfButton}
-                    </button>
+                    <div className="flex flex-col items-end gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedSubmissionId((current) => (current === row.id ? null : row.id))}
+                        className="text-sm font-semibold text-slate-700"
+                      >
+                        {selectedSubmissionId === row.id ? 'Hide details' : 'View details'}
+                      </button>
+                      <button type="button" onClick={() => exportSubmissionPdf(row, language)} className="text-sm font-semibold text-sky-700">
+                        {t.exportPdfButton}
+                      </button>
+                    </div>
                   </div>
+
+                  {selectedSubmissionId === row.id ? (
+                    <div className="mt-3 rounded-xl border border-sky-100 bg-white p-3">
+                      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">AI Study Path Evaluation</p>
+                      <p className="mt-2 text-sm text-slate-700">{row.study_path_explanation || 'No AI explanation available.'}</p>
+                    </div>
+                  ) : null}
                 </div>
               ))
             )}

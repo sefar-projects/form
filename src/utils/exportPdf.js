@@ -1,6 +1,5 @@
 import { jsPDF } from 'jspdf'
 import html2canvas from 'html2canvas'
-import { calculateChances } from './chancesCalculator'
 import { translations } from '../i18n/translations'
 
 function formatValue(value) {
@@ -110,6 +109,54 @@ function renderSectionTable(title, rows, isArabic) {
   `
 }
 
+function getAiAlignmentLabel(score, isArabic) {
+  if (score >= 8) return isArabic ? 'توافق قوي' : 'Strong Alignment'
+  if (score < 5) return isArabic ? 'مخاطر فيزا مرتفعة' : 'High Visa Risk'
+  return isArabic ? 'توافق متوسط' : 'Moderate Alignment'
+}
+
+function renderAiEvaluationSection(submission, isArabic) {
+  const title = isArabic ? 'تقييم توافق المسار الأكاديمي بالذكاء الاصطناعي' : 'AI Academic Alignment Evaluation'
+  const rawScore = submission.study_path_score
+  const hasNumericScore = rawScore !== null && rawScore !== undefined && rawScore !== '' && !Number.isNaN(Number(rawScore))
+  const numericScore = hasNumericScore ? Number(rawScore) : null
+  const explanation = submission.study_path_explanation
+    ? String(submission.study_path_explanation).trim()
+    : ''
+
+  if (numericScore === null && !explanation) {
+    return `
+      <section style="margin-bottom:14px;">
+        <h2 style="margin:0 0 8px 0;font-size:14px;color:#0f172a;background:#e2e8f0;padding:8px 10px;border-radius:8px;">${escapeHtml(title)}</h2>
+        <div style="border:1px solid #e2e8f0;border-radius:8px;background:#ffffff;padding:10px;font-size:11px;color:#475569;">
+          ${escapeHtml(isArabic ? 'التقييم قيد الانتظار.' : 'Evaluation pending.')}
+        </div>
+      </section>
+    `
+  }
+
+  const label = numericScore === null ? (isArabic ? 'غير متاح' : 'Not available') : getAiAlignmentLabel(numericScore, isArabic)
+  const scoreText = numericScore === null
+    ? (isArabic ? 'قيد الانتظار' : 'Evaluation pending.')
+    : `${numericScore}/10`
+  const explanationText = explanation || (isArabic ? 'التقييم قيد الانتظار.' : 'Evaluation pending.')
+
+  return `
+    <section style="margin-bottom:14px;">
+      <h2 style="margin:0 0 8px 0;font-size:14px;color:#0f172a;background:#e2e8f0;padding:8px 10px;border-radius:8px;">${escapeHtml(title)}</h2>
+      <div style="border:1px solid #e2e8f0;border-radius:8px;background:#ffffff;padding:10px;">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px;">
+          <strong style="font-size:12px;color:#0f172a;">${escapeHtml(isArabic ? 'النتيجة' : 'Score')}: ${escapeHtml(scoreText)}</strong>
+          <span style="display:inline-block;padding:2px 8px;border-radius:999px;background:#e2e8f0;color:#0f172a;font-size:11px;font-weight:600;">
+            ${escapeHtml(label)}
+          </span>
+        </div>
+        <p style="margin:0;font-size:11px;line-height:1.5;color:#334155;white-space:pre-wrap;">${escapeHtml(explanationText)}</p>
+      </div>
+    </section>
+  `
+}
+
 function escapeHtml(value) {
   return String(value)
     .replaceAll('&', '&amp;')
@@ -127,12 +174,7 @@ function getChanceDetails(submission) {
     return stored
   }
 
-  return calculateChances(
-    submission.gpa,
-    submission.english_level,
-    submission.selected_countries || [],
-    submission.degree_type,
-  )
+  return {}
 }
 
 function renderBasicRows(submission, isArabic, countryData) {
@@ -169,21 +211,25 @@ function renderChanceRows(scoreData, t, isArabic) {
       const b = result.breakdown
       explanation = [
         `Base ${b.baseScore}`,
-        `Mark +${b.finalMarkContribution}`,
+        `GPA +${b.gpaContribution ?? b.finalMarkContribution ?? 0}`,
         `Language +${b.languageContribution}`,
         `Degree +${b.degreeContribution}`,
-        `Penalty -${b.minimumMarkPenalty}`,
-        `Minimum ${b.minimumRequiredMark}/20`,
+        `Budget +${b.budgetContribution ?? 0}`,
+        `AI +${b.aiContribution ?? 0}`,
+        `Penalty -${b.totalPenalty ?? b.minimumMarkPenalty ?? 0}`,
+        `Minimum ${b.minimumRequiredGpa ?? b.minimumRequiredMark ?? 0}/20`,
       ].join(' | ')
 
       if (isArabic) {
         explanation = [
           `الأساس ${b.baseScore}`,
-          `المعدل +${b.finalMarkContribution}`,
+          `المعدل +${b.gpaContribution ?? b.finalMarkContribution ?? 0}`,
           `اللغة +${b.languageContribution}`,
           `الشهادة +${b.degreeContribution}`,
-          `الخصم -${b.minimumMarkPenalty}`,
-          `الحد الأدنى ${b.minimumRequiredMark}/20`,
+          `الميزانية +${b.budgetContribution ?? 0}`,
+          `المسار الدراسي +${b.aiContribution ?? 0}`,
+          `الخصم -${b.totalPenalty ?? b.minimumMarkPenalty ?? 0}`,
+          `الحد الأدنى ${b.minimumRequiredGpa ?? b.minimumRequiredMark ?? 0}/20`,
         ].join(' | ')
       }
     }
@@ -204,6 +250,7 @@ export async function exportSubmissionPdf(submission, language = 'en') {
   const scoreData = getChanceDetails(submission)
 
   const sectionRows = renderBasicRows(submission, isArabic, countryData)
+  const aiEvaluationSectionHtml = renderAiEvaluationSection(submission, isArabic)
   const sectionTablesHtml = [
     renderSectionTable(isArabic ? 'البيانات الشخصية' : 'Personal details', sectionRows.personalRows, isArabic),
     renderSectionTable(isArabic ? 'البيانات الأكاديمية' : 'Academic details', sectionRows.academicRows, isArabic),
@@ -239,6 +286,7 @@ export async function exportSubmissionPdf(submission, language = 'en') {
       <p style="margin:0 0 16px 0;font-size:13px;color:#475569;">${escapeHtml(subtitle)}</p>
 
       ${sectionTablesHtml}
+      ${aiEvaluationSectionHtml}
 
       <h2 style="font-size:16px;margin:16px 0 8px 0;">${escapeHtml(isArabic ? 'جدول بيانات الدول' : 'Country-specific details')}</h2>
       <table style="width:100%;border-collapse:collapse;margin-bottom:18px;font-size:11px;background:#ffffff;">
