@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { countriesConfig } from '../../config/countriesConfig'
 import { getAccessCodeByValue, consumeAccessCode } from '../../services/accessCodeService'
 import { evaluateStudyPath, fetchUniversityCriteria, submitLead } from '../../services/supabaseService'
-import { calculateChances } from '../../utils/chancesCalculator'
+import { calculateChances, suggestBestUniversity } from '../../utils/chancesCalculator'
 import { translations } from '../../i18n/translations'
 import logo from '../../assets/logo.png'
 import StepOne from './StepOne'
@@ -375,6 +375,24 @@ function LeadForm() {
         universityRules,
         aiResult.relevance_score,
       )
+
+      const recommendation = suggestBestUniversity(
+        {
+          gpa: values.finalMark,
+          english_level: englishLevelForScoring,
+          selected_countries: values.selectedCountries,
+          degree_type: values.degreeType,
+          budget_availability: values.tuitionBudgetRange,
+          date_of_birth: values.dob,
+          last_degree_date: values.lastDegreeDate,
+          studied_in_english_before: values.studiedInEnglishBefore,
+          country_specific_data: countrySpecificData,
+        },
+        universityRules,
+        scorePayload,
+      )
+
+      countrySpecificData._meta.recommendation = recommendation
 
       await submitLead({
         firstName: values.firstName,

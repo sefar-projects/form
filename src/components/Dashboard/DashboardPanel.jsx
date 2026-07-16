@@ -1,8 +1,48 @@
 import { useEffect, useMemo, useState } from 'react'
 import { createAccessCode, getAccessCodes } from '../../services/accessCodeService'
+import { fetchUniversityCriteria } from '../../services/supabaseService'
 import { supabase } from '../../lib/supabase'
 import { translations } from '../../i18n/translations'
+import { calculateChances, suggestBestUniversity } from '../../utils/chancesCalculator'
 import { exportSubmissionPdf } from '../../utils/exportPdf'
+
+function parseObjectValue(value) {
+  if (!value) return {}
+  if (typeof value === 'object') return value
+
+  try {
+    return JSON.parse(value)
+  } catch {
+    return {}
+  }
+}
+
+function parseSelectedCountries(value) {
+  if (Array.isArray(value)) return value
+
+  if (typeof value === 'string' && value.trim()) {
+    return value.split(',').map((item) => item.trim()).filter(Boolean)
+  }
+
+  return []
+}
+
+function buildLeadDataFromSubmission(row) {
+  const countrySpecificData = parseObjectValue(row.country_specific_data)
+  const academicMeta = countrySpecificData?._meta?.academic || {}
+
+  return {
+    gpa: row.gpa,
+    english_level: row.english_level,
+    selected_countries: parseSelectedCountries(row.selected_countries),
+    degree_type: row.degree_type,
+    budget_availability: row.budget_availability,
+    date_of_birth: row.date_of_birth,
+    last_degree_date: row.last_degree_date || academicMeta.lastDegreeDate,
+    studied_in_english_before: row.studied_in_english_before ?? academicMeta.studiedInEnglishBefore,
+    country_specific_data: countrySpecificData,
+  }
+}
 
 function DashboardPanel({ language = 'en', onBack, onLogout }) {
   const t = translations[language] || translations.en
@@ -10,6 +50,7 @@ function DashboardPanel({ language = 'en', onBack, onLogout }) {
   const [codes, setCodes] = useState([])
   const [submissions, setSubmissions] = useState([])
   const [loading, setLoading] = useState(false)
+  const [isRecomputing, setIsRecomputing] = useState(false)
   const [message, setMessage] = useState('')
   const [selectedSubmissionId, setSelectedSubmissionId] = useState(null)
 
@@ -59,6 +100,62 @@ function DashboardPanel({ language = 'en', onBack, onLogout }) {
     if (numericScore >= 7) return 'bg-emerald-100 text-emerald-700'
     if (numericScore >= 5) return 'bg-amber-100 text-amber-700'
     return 'bg-rose-100 text-rose-700'
+  }
+
+  const getRecommendationForRow = (row) => {
+    const countrySpecificData = parseObjectValue(row.country_specific_data)
+    return countrySpecificData?._meta?.recommendation || null
+  }
+
+  const recomputeLeadScores = async () => {
+    if (usedSubmissions.length === 0) {
+      setMessage('No submissions found to recompute.')
+      return
+    }
+
+    setIsRecomputing(true)
+    setMessage('Recomputing lead scores and recommendations...')
+
+    try {
+      const rules = await fetchUniversityCriteria()
+      let updatedCount = 0
+
+      for (const row of usedSubmissions) {
+        const leadData = buildLeadDataFromSubmission(row)
+        const aiScore = Number(row.study_path_score ?? 0)
+
+        const refreshedScore = calculateChances(leadData, rules, aiScore)
+        const recommendation = suggestBestUniversity(leadData, rules, refreshedScore)
+
+        const countrySpecificData = parseObjectValue(row.country_specific_data)
+        const updatedCountryData = {
+          ...countrySpecificData,
+          _meta: {
+            ...(countrySpecificData._meta || {}),
+            recommendation,
+          },
+        }
+
+        const { error } = await supabase
+          .from('leads')
+          .update({
+            agency_internal_score: refreshedScore,
+            country_specific_data: updatedCountryData,
+          })
+          .eq('id', row.id)
+
+        if (!error) {
+          updatedCount += 1
+        }
+      }
+
+      await loadData()
+      setMessage(`Recomputed ${updatedCount} lead(s) with fresh scoring and recommendation.`)
+    } catch (error) {
+      setMessage(error.message || 'Unable to recompute lead scores right now.')
+    } finally {
+      setIsRecomputing(false)
+    }
   }
 
   const usedSubmissions = useMemo(() => submissions.filter((row) => row.access_code), [submissions])
@@ -126,7 +223,17 @@ function DashboardPanel({ language = 'en', onBack, onLogout }) {
 
         <div className="rounded-3xl border border-sky-100 bg-white p-6 shadow-sm">
           <h4 className="text-lg font-semibold text-slate-800">{t.submissionsLabel}</h4>
-          <p className="mt-2 text-sm text-slate-500">{usedSubmissions.length} {t.submissionsLabel.toLowerCase()}</p>
+          <div className="mt-2 flex items-center justify-between gap-2">
+            <p className="text-sm text-slate-500">{usedSubmissions.length} {t.submissionsLabel.toLowerCase()}</p>
+            <button
+              type="button"
+              onClick={recomputeLeadScores}
+              disabled={isRecomputing}
+              className="rounded-full border border-sky-200 px-3 py-1.5 text-xs font-semibold text-sky-700 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {isRecomputing ? 'Recomputing...' : 'Recompute old leads'}
+            </button>
+          </div>
           <div className="mt-4 space-y-3">
             {usedSubmissions.length === 0 ? (
               <p className="text-sm text-slate-500">{t.noSubmissions}</p>
@@ -144,6 +251,11 @@ function DashboardPanel({ language = 'en', onBack, onLogout }) {
                           {row.study_path_score ?? 'N/A'}
                         </span>
                       </div>
+                      {getRecommendationForRow(row) ? (
+                        <p className="mt-2 text-xs text-slate-600">
+                          Suggested: {getRecommendationForRow(row).country} - {getRecommendationForRow(row).university}
+                        </p>
+                      ) : null}
                     </div>
                     <div className="flex flex-col items-end gap-2">
                       <button
@@ -163,6 +275,17 @@ function DashboardPanel({ language = 'en', onBack, onLogout }) {
                     <div className="mt-3 rounded-xl border border-sky-100 bg-white p-3">
                       <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">AI Study Path Evaluation</p>
                       <p className="mt-2 text-sm text-slate-700">{row.study_path_explanation || 'No AI explanation available.'}</p>
+                      {getRecommendationForRow(row) ? (
+                        <>
+                          <p className="mt-3 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Suggested Best Option</p>
+                          <p className="mt-2 text-sm text-slate-700">
+                            {getRecommendationForRow(row).country} - {getRecommendationForRow(row).university} ({getRecommendationForRow(row).recommendation_score}/100)
+                          </p>
+                          <p className="mt-2 text-xs text-slate-600">
+                            {(getRecommendationForRow(row).reasons || []).join(' | ')}
+                          </p>
+                        </>
+                      ) : null}
                     </div>
                   ) : null}
                 </div>

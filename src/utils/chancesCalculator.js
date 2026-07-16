@@ -58,6 +58,36 @@ function normalizeGpaTo20Scale(rawGpa) {
   return 20
 }
 
+function parseMinimumGpaTo20Scale(minimumGpaRaw) {
+  if (minimumGpaRaw === null || minimumGpaRaw === undefined || minimumGpaRaw === '') {
+    return 10
+  }
+
+  if (typeof minimumGpaRaw === 'number') {
+    return normalizeGpaTo20Scale(minimumGpaRaw)
+  }
+
+  const normalized = `${minimumGpaRaw}`.trim()
+
+  // Supports formats such as "10/20", "2.5/4", "70/100"
+  const ratioMatch = normalized.match(/(\d+(?:\.\d+)?)\s*\/\s*(\d+(?:\.\d+)?)/)
+  if (ratioMatch) {
+    const numerator = Number(ratioMatch[1])
+    const denominator = Number(ratioMatch[2])
+
+    if (Number.isFinite(numerator) && Number.isFinite(denominator) && denominator > 0) {
+      return Number(((numerator / denominator) * 20).toFixed(2))
+    }
+  }
+
+  const directValueMatch = normalized.match(/\d+(?:\.\d+)?/)
+  if (directValueMatch) {
+    return normalizeGpaTo20Scale(Number(directValueMatch[0]))
+  }
+
+  return 10
+}
+
 function parseBudgetToNumber(value) {
   if (!value) return 0
 
@@ -138,6 +168,28 @@ function pickRuleForCountry(universityRules = [], countryName = '', preferredUni
   return countryRules[0]
 }
 
+function normalizeYesNo(value) {
+  if (typeof value === 'boolean') {
+    return value
+  }
+
+  const normalized = `${value || ''}`.trim().toLowerCase()
+  return normalized === 'yes' || normalized === 'true'
+}
+
+function isDegreeLevelSupported(rule, selectedTargetDegree) {
+  const target = `${selectedTargetDegree || ''}`.trim().toLowerCase()
+  if (!target) return true
+
+  const levels = [rule?.level_1, rule?.level_2]
+    .map((item) => `${item || ''}`.trim().toLowerCase())
+    .filter(Boolean)
+
+  if (levels.length === 0) return true
+
+  return levels.some((level) => target.includes(level) || level.includes(target))
+}
+
 export function calculateChances(leadData, universityRules = [], aiStudyPathScore = 0) {
   const normalizedMarkOn20 = normalizeGpaTo20Scale(leadData?.gpa)
   const normalizedMarkRatio = normalizedMarkOn20 / 20
@@ -161,7 +213,7 @@ export function calculateChances(leadData, universityRules = [], aiStudyPathScor
     const selectedTargetDegree = dynamicAnswers.desiredLevel || leadData?.degree_type || ''
     const rule = pickRuleForCountry(universityRules, countryName, preferredUniversity)
 
-    const minimumGpa = Number(rule?.minimum_gpa ?? 10)
+    const minimumGpa = parseMinimumGpaTo20Scale(rule?.minimum_gpa)
     const minimumFee = Number(rule?.minimum_fee ?? 0)
     const maxGapYears = Number(rule?.max_gap_years ?? 99)
     const minimumIelts = Number(rule?.minimum_ielts ?? 0)
@@ -171,7 +223,7 @@ export function calculateChances(leadData, universityRules = [], aiStudyPathScor
 
     const derivedGapYears = calculateGapYears(leadData?.date_of_birth, leadData?.last_degree_date)
     const ageFromDob = calculateAgeFromDob(leadData?.date_of_birth)
-    const studiedInEnglishBefore = `${leadData?.studied_in_english_before || ''}`.toLowerCase() === 'yes'
+    const studiedInEnglishBefore = normalizeYesNo(leadData?.studied_in_english_before)
     const shouldBypassLanguagePenalty = acceptsEnglishMoi && studiedInEnglishBefore
 
     const baseScore = 20
@@ -278,4 +330,125 @@ export function calculateChances(leadData, universityRules = [], aiStudyPathScor
 
     return accumulator
   }, {})
+}
+
+export function suggestBestUniversity(leadData, universityRules = [], chancesByCountry = {}) {
+  if (!Array.isArray(universityRules) || universityRules.length === 0) {
+    return null
+  }
+
+  const selectedCountries = Array.isArray(leadData?.selected_countries)
+    ? leadData.selected_countries.map((country) => `${country || ''}`.trim().toLowerCase()).filter(Boolean)
+    : []
+  const countrySpecificData = typeof leadData?.country_specific_data === 'object' && leadData.country_specific_data
+    ? leadData.country_specific_data
+    : {}
+
+  const normalizedMarkOn20 = normalizeGpaTo20Scale(leadData?.gpa)
+  const leadBudget = parseBudgetToNumber(leadData?.budget_availability)
+  const normalizedLanguage = parseLanguageLevel(leadData?.english_level)
+  const derivedGapYears = calculateGapYears(leadData?.date_of_birth, leadData?.last_degree_date)
+  const ageFromDob = calculateAgeFromDob(leadData?.date_of_birth)
+  const studiedInEnglishBefore = normalizeYesNo(leadData?.studied_in_english_before)
+
+  const candidateRules = universityRules.filter((rule) => {
+    if (selectedCountries.length === 0) return true
+    return selectedCountries.includes(`${rule.country || ''}`.trim().toLowerCase())
+  })
+
+  if (candidateRules.length === 0) {
+    return null
+  }
+
+  let bestOption = null
+
+  candidateRules.forEach((rule) => {
+    const countryKey = `${rule.country || ''}`.trim()
+    const dynamicAnswers = countrySpecificData[countryKey] || {}
+    const selectedTargetDegree = dynamicAnswers.desiredLevel || leadData?.degree_type || ''
+    const chancePercentage = Number(chancesByCountry?.[countryKey]?.percentage ?? 0)
+
+    const minimumGpa = parseMinimumGpaTo20Scale(rule?.minimum_gpa)
+    const minimumFee = Number(rule?.minimum_fee ?? 0)
+    const maxGapYears = Number(rule?.max_gap_years ?? 99)
+    const minimumIelts = Number(rule?.minimum_ielts ?? 0)
+    const maxAgeBachelor = Number(rule?.max_age_bachelor ?? 99)
+    const maxAgeMaster = Number(rule?.max_age_master ?? 99)
+    const acceptsEnglishMoi = Boolean(rule?.accepts_english_moi)
+
+    let score = 60
+    const reasons = []
+
+    if (normalizedMarkOn20 >= minimumGpa) {
+      score += 12
+      reasons.push(`GPA eligible (${normalizedMarkOn20.toFixed(1)}/20 >= ${minimumGpa}/20).`)
+    } else {
+      score -= 18
+      reasons.push(`GPA may be below minimum (${normalizedMarkOn20.toFixed(1)}/20 < ${minimumGpa}/20).`)
+    }
+
+    if (minimumFee > 0 && leadBudget >= minimumFee) {
+      score += 10
+      reasons.push(`Budget fits tuition threshold (${leadBudget} >= ${minimumFee}).`)
+    } else if (minimumFee > 0) {
+      score -= 15
+      reasons.push(`Budget may be below tuition threshold (${leadBudget} < ${minimumFee}).`)
+    }
+
+    if (derivedGapYears <= maxGapYears) {
+      score += 8
+      reasons.push(`Academic gap is within limit (${derivedGapYears} <= ${maxGapYears}).`)
+    } else {
+      score -= 12
+      reasons.push(`Academic gap is above limit (${derivedGapYears} > ${maxGapYears}).`)
+    }
+
+    const maxAge = `${selectedTargetDegree}`.toLowerCase().includes('master') ? maxAgeMaster : maxAgeBachelor
+    if (ageFromDob <= maxAge) {
+      score += 8
+      reasons.push(`Age profile fits typical limit (${ageFromDob} <= ${maxAge}).`)
+    } else {
+      score -= 10
+      reasons.push(`Age profile may exceed typical limit (${ageFromDob} > ${maxAge}).`)
+    }
+
+    if (acceptsEnglishMoi && studiedInEnglishBefore) {
+      score += 6
+      reasons.push('English MOI accepted and applicant studied in English.')
+    } else if (minimumIelts > 0) {
+      const inferredIelts = normalizedLanguage * 9
+      if (inferredIelts >= minimumIelts) {
+        score += 6
+        reasons.push(`Language profile likely meets IELTS threshold (${inferredIelts.toFixed(1)} >= ${minimumIelts}).`)
+      } else {
+        score -= 8
+        reasons.push(`Language profile may be below IELTS threshold (${inferredIelts.toFixed(1)} < ${minimumIelts}).`)
+      }
+    }
+
+    if (isDegreeLevelSupported(rule, selectedTargetDegree)) {
+      score += 5
+      reasons.push(`Program level appears supported (${selectedTargetDegree || 'selected degree'}).`)
+    } else {
+      score -= 12
+      reasons.push(`Program level may not match available levels (${rule.level_1 || '-'} / ${rule.level_2 || '-' }).`)
+    }
+
+    // Reuse calculated country chance to bias recommendation toward stronger overall outcomes.
+    score += Math.max(0, Math.min(20, chancePercentage / 5))
+
+    const boundedScore = Math.max(0, Math.min(100, Math.round(score)))
+    const option = {
+      country: rule.country,
+      university: rule.university,
+      recommendation_score: boundedScore,
+      reasons,
+    }
+
+    if (!bestOption || option.recommendation_score > bestOption.recommendation_score) {
+      bestOption = option
+    }
+  })
+
+  return bestOption
 }

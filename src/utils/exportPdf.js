@@ -157,6 +157,35 @@ function renderAiEvaluationSection(submission, isArabic) {
   `
 }
 
+function renderRecommendationSection(countryData, isArabic) {
+  const recommendation = countryData?._meta?.recommendation
+  const title = isArabic ? 'أفضل اقتراح جامعة ودولة' : 'Best University and Country Suggestion'
+
+  if (!recommendation?.country || !recommendation?.university) {
+    return `
+      <section style="margin-bottom:14px;">
+        <h2 style="margin:0 0 8px 0;font-size:14px;color:#0f172a;background:#e2e8f0;padding:8px 10px;border-radius:8px;">${escapeHtml(title)}</h2>
+        <div style="border:1px solid #e2e8f0;border-radius:8px;background:#ffffff;padding:10px;font-size:11px;color:#475569;">
+          ${escapeHtml(isArabic ? 'لا يوجد اقتراح متاح بعد.' : 'No recommendation available yet.')}
+        </div>
+      </section>
+    `
+  }
+
+  const reasons = Array.isArray(recommendation.reasons) ? recommendation.reasons : []
+
+  return `
+    <section style="margin-bottom:14px;">
+      <h2 style="margin:0 0 8px 0;font-size:14px;color:#0f172a;background:#e2e8f0;padding:8px 10px;border-radius:8px;">${escapeHtml(title)}</h2>
+      <div style="border:1px solid #e2e8f0;border-radius:8px;background:#ffffff;padding:10px;">
+        <p style="margin:0 0 6px 0;font-size:12px;color:#0f172a;"><strong>${escapeHtml(isArabic ? 'الاقتراح' : 'Suggested option')}:</strong> ${escapeHtml(recommendation.country)} - ${escapeHtml(recommendation.university)}</p>
+        <p style="margin:0 0 6px 0;font-size:11px;color:#334155;"><strong>${escapeHtml(isArabic ? 'نقاط التوصية' : 'Recommendation score')}:</strong> ${escapeHtml(recommendation.recommendation_score || 'N/A')}/100</p>
+        <p style="margin:0;font-size:11px;line-height:1.5;color:#334155;white-space:pre-wrap;">${escapeHtml(reasons.join(' | ') || (isArabic ? 'لا توجد أسباب مفصلة.' : 'No detailed reasons.'))}</p>
+      </div>
+    </section>
+  `
+}
+
 function escapeHtml(value) {
   return String(value)
     .replaceAll('&', '&amp;')
@@ -206,31 +235,56 @@ function renderChanceRows(scoreData, t, isArabic) {
     const countryName = t.countryNames?.[countryKey] || countryKey
     const percentage = typeof result === 'object' ? result.percentage : result
 
-    let explanation = 'Legacy score record'
+    let explanation = isArabic ? 'سجل قديم بدون تفاصيل كاملة.' : 'Legacy score record without full details.'
     if (typeof result === 'object' && result.breakdown) {
       const b = result.breakdown
-      explanation = [
-        `Base ${b.baseScore}`,
-        `GPA +${b.gpaContribution ?? b.finalMarkContribution ?? 0}`,
-        `Language +${b.languageContribution}`,
-        `Degree +${b.degreeContribution}`,
-        `Budget +${b.budgetContribution ?? 0}`,
-        `AI +${b.aiContribution ?? 0}`,
-        `Penalty -${b.totalPenalty ?? b.minimumMarkPenalty ?? 0}`,
-        `Minimum ${b.minimumRequiredGpa ?? b.minimumRequiredMark ?? 0}/20`,
-      ].join(' | ')
+      const minGpaRaw = b.minimumRequiredGpa ?? b.minimumRequiredMark
+      const minGpa = Number(minGpaRaw)
+      const minGpaText = Number.isFinite(minGpa) && minGpa > 0 ? `${minGpa}/20` : (isArabic ? 'غير محدد' : 'N/A')
 
-      if (isArabic) {
-        explanation = [
-          `الأساس ${b.baseScore}`,
-          `المعدل +${b.gpaContribution ?? b.finalMarkContribution ?? 0}`,
-          `اللغة +${b.languageContribution}`,
-          `الشهادة +${b.degreeContribution}`,
-          `الميزانية +${b.budgetContribution ?? 0}`,
-          `المسار الدراسي +${b.aiContribution ?? 0}`,
-          `الخصم -${b.totalPenalty ?? b.minimumMarkPenalty ?? 0}`,
-          `الحد الأدنى ${b.minimumRequiredGpa ?? b.minimumRequiredMark ?? 0}/20`,
-        ].join(' | ')
+      const baseScore = Number(b.baseScore ?? 0)
+      const gpaContribution = Number(b.gpaContribution ?? b.finalMarkContribution ?? 0)
+      const languageContribution = Number(b.languageContribution ?? 0)
+      const degreeContribution = Number(b.degreeContribution ?? 0)
+      const budgetContribution = Number(b.budgetContribution ?? 0)
+      const aiContribution = Number(b.aiContribution ?? 0)
+      const penalty = Number(b.totalPenalty ?? b.minimumMarkPenalty ?? 0)
+      const rawScore = Number(result.rawScore ?? 0)
+
+      const formula = isArabic
+        ? `المعادلة: ${baseScore.toFixed(1)} + ${gpaContribution.toFixed(1)} + ${languageContribution.toFixed(1)} + ${degreeContribution.toFixed(1)} + ${budgetContribution.toFixed(1)} + ${aiContribution.toFixed(1)} - ${penalty.toFixed(1)} = ${rawScore.toFixed(1)}`
+        : `Formula: ${baseScore.toFixed(1)} + ${gpaContribution.toFixed(1)} + ${languageContribution.toFixed(1)} + ${degreeContribution.toFixed(1)} + ${budgetContribution.toFixed(1)} + ${aiContribution.toFixed(1)} - ${penalty.toFixed(1)} = ${rawScore.toFixed(1)}`
+
+      const labels = isArabic
+        ? [
+          `الأساس ${baseScore.toFixed(1)}`,
+          `المعدل +${gpaContribution.toFixed(1)}`,
+          `اللغة +${languageContribution.toFixed(1)}`,
+          `الشهادة +${degreeContribution.toFixed(1)}`,
+          `الميزانية +${budgetContribution.toFixed(1)}`,
+          `المسار الدراسي +${aiContribution.toFixed(1)}`,
+          `الخصم -${penalty.toFixed(1)}`,
+          `الحد الأدنى للمعدل ${minGpaText}`,
+        ]
+        : [
+          `Base ${baseScore.toFixed(1)}`,
+          `GPA +${gpaContribution.toFixed(1)}`,
+          `Language +${languageContribution.toFixed(1)}`,
+          `Degree +${degreeContribution.toFixed(1)}`,
+          `Budget +${budgetContribution.toFixed(1)}`,
+          `AI +${aiContribution.toFixed(1)}`,
+          `Penalty -${penalty.toFixed(1)}`,
+          `Minimum GPA ${minGpaText}`,
+        ]
+
+      const detailedReasons = Array.isArray(result.explanation) ? result.explanation : []
+      const weakPoints = Array.isArray(result.weak_points) ? result.weak_points : []
+      const reasonText = [...detailedReasons, ...weakPoints].join(' | ')
+
+      explanation = [labels.join(' | '), formula, reasonText].filter(Boolean).join(' || ')
+
+      if (!explanation.trim()) {
+        explanation = isArabic ? 'لا توجد تفاصيل متاحة.' : 'No details available.'
       }
     }
 
@@ -251,6 +305,7 @@ export async function exportSubmissionPdf(submission, language = 'en') {
 
   const sectionRows = renderBasicRows(submission, isArabic, countryData)
   const aiEvaluationSectionHtml = renderAiEvaluationSection(submission, isArabic)
+  const recommendationSectionHtml = renderRecommendationSection(countryData, isArabic)
   const sectionTablesHtml = [
     renderSectionTable(isArabic ? 'البيانات الشخصية' : 'Personal details', sectionRows.personalRows, isArabic),
     renderSectionTable(isArabic ? 'البيانات الأكاديمية' : 'Academic details', sectionRows.academicRows, isArabic),
@@ -287,6 +342,7 @@ export async function exportSubmissionPdf(submission, language = 'en') {
 
       ${sectionTablesHtml}
       ${aiEvaluationSectionHtml}
+      ${recommendationSectionHtml}
 
       <h2 style="font-size:16px;margin:16px 0 8px 0;">${escapeHtml(isArabic ? 'جدول بيانات الدول' : 'Country-specific details')}</h2>
       <table style="width:100%;border-collapse:collapse;margin-bottom:18px;font-size:11px;background:#ffffff;">
