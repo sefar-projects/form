@@ -173,13 +173,17 @@ function renderRecommendationSection(countryData, isArabic) {
   }
 
   const reasons = Array.isArray(recommendation.reasons) ? recommendation.reasons : []
+  const recommendationRawScore = Number(recommendation.recommendation_score)
+  const recommendationScoreOutOf10 = Number.isFinite(recommendationRawScore)
+    ? (recommendationRawScore > 10 ? Number((recommendationRawScore / 10).toFixed(1)) : Number(recommendationRawScore.toFixed(1)))
+    : null
 
   return `
     <section style="margin-bottom:14px;">
       <h2 style="margin:0 0 8px 0;font-size:14px;color:#0f172a;background:#e2e8f0;padding:8px 10px;border-radius:8px;">${escapeHtml(title)}</h2>
       <div style="border:1px solid #e2e8f0;border-radius:8px;background:#ffffff;padding:10px;">
         <p style="margin:0 0 6px 0;font-size:12px;color:#0f172a;"><strong>${escapeHtml(isArabic ? 'الاقتراح' : 'Suggested option')}:</strong> ${escapeHtml(recommendation.country)} - ${escapeHtml(recommendation.university)}</p>
-        <p style="margin:0 0 6px 0;font-size:11px;color:#334155;"><strong>${escapeHtml(isArabic ? 'نقاط التوصية' : 'Recommendation score')}:</strong> ${escapeHtml(recommendation.recommendation_score || 'N/A')}/100</p>
+        <p style="margin:0 0 6px 0;font-size:11px;color:#334155;"><strong>${escapeHtml(isArabic ? 'نقاط التوصية' : 'Recommendation score')}:</strong> ${escapeHtml(recommendationScoreOutOf10 ?? 'N/A')}/10</p>
         <p style="margin:0;font-size:11px;line-height:1.5;color:#334155;white-space:pre-wrap;">${escapeHtml(reasons.join(' | ') || (isArabic ? 'لا توجد أسباب مفصلة.' : 'No detailed reasons.'))}</p>
       </div>
     </section>
@@ -228,6 +232,36 @@ function renderCountryTableRows(countryData, t) {
   return rows
 }
 
+function normalizeMinGpaDisplay(value, isArabic) {
+  if (value === null || value === undefined || value === '') {
+    return isArabic ? 'غير محدد' : 'N/A'
+  }
+
+  if (typeof value === 'number') {
+    return value > 0 ? `${value}/20` : (isArabic ? 'غير محدد' : 'N/A')
+  }
+
+  const text = String(value).trim()
+  const ratioMatch = text.match(/(\d+(?:\.\d+)?)\s*\/\s*(\d+(?:\.\d+)?)/)
+  if (ratioMatch) {
+    const numerator = Number(ratioMatch[1])
+    const denominator = Number(ratioMatch[2])
+    if (Number.isFinite(numerator) && Number.isFinite(denominator) && denominator > 0) {
+      return `${((numerator / denominator) * 20).toFixed(2)}/20`
+    }
+  }
+
+  const numericMatch = text.match(/\d+(?:\.\d+)?/)
+  if (numericMatch) {
+    const numericValue = Number(numericMatch[0])
+    if (Number.isFinite(numericValue) && numericValue > 0) {
+      return `${numericValue}/20`
+    }
+  }
+
+  return isArabic ? 'غير محدد' : 'N/A'
+}
+
 function renderChanceRows(scoreData, t, isArabic) {
   const rows = []
 
@@ -239,8 +273,7 @@ function renderChanceRows(scoreData, t, isArabic) {
     if (typeof result === 'object' && result.breakdown) {
       const b = result.breakdown
       const minGpaRaw = b.minimumRequiredGpa ?? b.minimumRequiredMark
-      const minGpa = Number(minGpaRaw)
-      const minGpaText = Number.isFinite(minGpa) && minGpa > 0 ? `${minGpa}/20` : (isArabic ? 'غير محدد' : 'N/A')
+      const minGpaText = normalizeMinGpaDisplay(minGpaRaw, isArabic)
 
       const baseScore = Number(b.baseScore ?? 0)
       const gpaContribution = Number(b.gpaContribution ?? b.finalMarkContribution ?? 0)

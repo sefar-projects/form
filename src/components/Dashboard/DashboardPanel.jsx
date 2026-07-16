@@ -44,6 +44,18 @@ function buildLeadDataFromSubmission(row) {
   }
 }
 
+function getRecommendationScoreOutOf10(recommendation) {
+  const raw = Number(recommendation?.recommendation_score)
+  if (!Number.isFinite(raw)) return null
+
+  // Backward compatibility for older saved values that used a /100 scale.
+  if (raw > 10) {
+    return Number((raw / 10).toFixed(1))
+  }
+
+  return Number(raw.toFixed(1))
+}
+
 function DashboardPanel({ language = 'en', onBack, onLogout }) {
   const t = translations[language] || translations.en
   const [customerName, setCustomerName] = useState('')
@@ -254,6 +266,9 @@ function DashboardPanel({ language = 'en', onBack, onLogout }) {
                       {getRecommendationForRow(row) ? (
                         <p className="mt-2 text-xs text-slate-600">
                           Suggested: {getRecommendationForRow(row).country} - {getRecommendationForRow(row).university}
+                          {getRecommendationScoreOutOf10(getRecommendationForRow(row)) !== null
+                            ? ` (${getRecommendationScoreOutOf10(getRecommendationForRow(row))}/10)`
+                            : ''}
                         </p>
                       ) : null}
                     </div>
@@ -279,7 +294,9 @@ function DashboardPanel({ language = 'en', onBack, onLogout }) {
                         <>
                           <p className="mt-3 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Suggested Best Option</p>
                           <p className="mt-2 text-sm text-slate-700">
-                            {getRecommendationForRow(row).country} - {getRecommendationForRow(row).university} ({getRecommendationForRow(row).recommendation_score}/100)
+                            {getRecommendationForRow(row).country} - {getRecommendationForRow(row).university}
+                            {' '}
+                            ({getRecommendationScoreOutOf10(getRecommendationForRow(row)) ?? 'N/A'}/10)
                           </p>
                           <p className="mt-2 text-xs text-slate-600">
                             {(getRecommendationForRow(row).reasons || []).join(' | ')}

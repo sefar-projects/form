@@ -43,7 +43,24 @@ function parseLanguageLevel(languageLevel = '') {
 
 function parseDegreeBonus(degreeType = '') {
   const normalized = `${degreeType}`.trim().toLowerCase()
-  return degreeBonusMap[normalized] || 0
+
+  if (degreeBonusMap[normalized] !== undefined) {
+    return degreeBonusMap[normalized]
+  }
+
+  // English variants
+  if (normalized.includes('master')) return degreeBonusMap.master
+  if (normalized.includes('bachelor')) return degreeBonusMap.bachelor
+  if (normalized.includes('engineering') || normalized.includes('engineer')) return degreeBonusMap.engineering
+  if (normalized.includes('baccalaureate') || normalized.includes('high school')) return degreeBonusMap.baccalaureate
+
+  // Arabic variants
+  if (normalized.includes('ماستر')) return degreeBonusMap.master
+  if (normalized.includes('ليسانس') || normalized.includes('إجازة')) return degreeBonusMap.bachelor
+  if (normalized.includes('هندسة') || normalized.includes('مهندس')) return degreeBonusMap.engineering
+  if (normalized.includes('بكالوريا')) return degreeBonusMap.baccalaureate
+
+  return 0
 }
 
 function normalizeGpaTo20Scale(rawGpa) {
@@ -437,11 +454,13 @@ export function suggestBestUniversity(leadData, universityRules = [], chancesByC
     // Reuse calculated country chance to bias recommendation toward stronger overall outcomes.
     score += Math.max(0, Math.min(20, chancePercentage / 5))
 
-    const boundedScore = Math.max(0, Math.min(100, Math.round(score)))
+    const boundedScore100 = Math.max(0, Math.min(100, Math.round(score)))
+    const boundedScore10 = Math.max(0, Math.min(10, Number((boundedScore100 / 10).toFixed(1))))
     const option = {
       country: rule.country,
       university: rule.university,
-      recommendation_score: boundedScore,
+      recommendation_score: boundedScore10,
+      recommendation_score_100: boundedScore100,
       reasons,
     }
 
