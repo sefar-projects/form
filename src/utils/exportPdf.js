@@ -330,6 +330,179 @@ function renderChanceRows(scoreData, t, isArabic) {
   return rows
 }
 
+export async function exportClientPdf(submission, language = 'ar') {
+  const isArabic = language === 'ar'
+  const labels = {
+    agencyName: isArabic ? 'سيفار للاستشارات التعليمية' : 'Sefar Educational Consultancy',
+    reportTitle: isArabic ? 'تقرير العميل' : 'Client Report',
+    reportDate: isArabic ? 'تاريخ التقرير' : 'Report date',
+    accessCode: isArabic ? 'رمز الوصول' : 'Access code',
+    applicantOverview: isArabic ? 'نظرة عامة عن المتقدم' : 'Applicant Overview',
+    name: isArabic ? 'الاسم' : 'Name',
+    degreeType: isArabic ? 'نوع الشهادة' : 'Degree type',
+    englishLevel: isArabic ? 'مستوى الإنجليزية' : 'English level',
+    compatibility: isArabic ? 'توافق المسار الأكاديمي' : 'Academic Path Compatibility',
+    scoreLabel: isArabic ? 'النتيجة' : 'Score',
+    explanationLabel: isArabic ? 'تفسير المسار الأكاديمي' : 'Explanation',
+    nextSteps: isArabic ? 'الخطوات التالية' : 'Next Steps',
+    checklistIntro: isArabic ? 'المستندات الموصى بها وخطوات المتابعة:' : 'Recommended documents and follow-up steps:',
+    quote: isArabic ? 'نحن نبني خطة قبول مخصصة لمستقبلك الدراسي.' : 'We build a tailored acceptance plan for your academic future.',
+  }
+
+  const fullName = pickFirstValue(
+    submission.name,
+    `${submission.first_name || ''} ${submission.last_name || ''}`.trim(),
+  ) || '—'
+
+  const degreeType = formatValue(submission.degree_type) || '—'
+  const englishLevel = formatValue(submission.english_level) || '—'
+  const scoreRaw = submission.study_path_score
+  const scoreNumber = Number(scoreRaw)
+  const scoreText = Number.isFinite(scoreNumber) ? `${scoreNumber}/10` : (isArabic ? 'غير متاح' : 'N/A')
+  const explanation = submission.study_path_explanation
+    ? String(submission.study_path_explanation).trim()
+    : (isArabic ? 'لا يوجد شرح متاح.' : 'No explanation available.')
+
+  const nextSteps = isArabic
+    ? [
+      'تحضير الشهادات مع تصديق الأبوستيل',
+      'حجز استشارة مع خبير سيفار',
+      'مراجعة متطلبات الجامعة والدولة المختارة',
+    ]
+    : [
+      'Prepare apostilled transcripts',
+      'Book a consultation with Sefar',
+      'Review your chosen university and country requirements',
+    ]
+
+  const reportDate = new Date().toLocaleDateString(isArabic ? 'ar-EG' : 'en-US', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  })
+
+  const wrapper = document.createElement('div')
+  wrapper.style.position = 'fixed'
+  wrapper.style.left = '0'
+  wrapper.style.top = '0'
+  wrapper.style.width = '900px'
+  wrapper.style.background = '#ffffff'
+  wrapper.style.padding = '24px'
+  wrapper.style.color = '#0f172a'
+  wrapper.style.fontFamily = 'Arial, Tahoma, sans-serif'
+  wrapper.style.zIndex = '-1'
+  wrapper.style.pointerEvents = 'none'
+  wrapper.dir = isArabic ? 'rtl' : 'ltr'
+
+  const textAlign = isArabic ? 'right' : 'left'
+  const oppositeAlign = isArabic ? 'left' : 'right'
+
+  wrapper.innerHTML = `
+    <div style="border:1px solid #e2e8f0;border-radius:24px;padding:28px;background:#f8fafc;max-width:900px;">
+      <div style="border-radius:20px;background:#ffffff;padding:26px;box-shadow:0 24px 60px rgba(15,23,42,0.08);">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:20px;flex-wrap:wrap;text-align:${textAlign};">
+          <div style="flex:1;min-width:240px;">
+            <p style="margin:0 0 10px 0;font-size:12px;font-weight:700;letter-spacing:0.08em;color:#0284c7;text-transform:uppercase;">${escapeHtml(labels.agencyName)}</p>
+            <h1 style="margin:0;font-size:28px;color:#0f172a;line-height:1.1;">${escapeHtml(labels.reportTitle)}</h1>
+          </div>
+          <div style="min-width:220px;">
+            <p style="margin:0 0 6px 0;font-size:12px;color:#475569;">${escapeHtml(labels.reportDate)}</p>
+            <p style="margin:0;font-size:14px;font-weight:700;color:#0f172a;">${escapeHtml(reportDate)}</p>
+            <div style="margin-top:14px;padding:12px 16px;border-radius:18px;background:#0284c7;color:#ffffff;font-size:12px;font-weight:700;display:inline-block;text-align:${textAlign};">
+              ${escapeHtml(labels.accessCode)}: ${escapeHtml(submission.access_code || '—')}
+            </div>
+          </div>
+        </div>
+
+        <section style="margin-top:28px;padding:22px;border-radius:20px;background:#f1f5f9;">
+          <h2 style="margin:0 0 14px 0;font-size:18px;color:#0f172a;">${escapeHtml(labels.applicantOverview)}</h2>
+          <div style="display:grid;gap:16px;grid-template-columns:repeat(3,minmax(0,1fr));font-size:13px;color:#334155;">
+            <div style="background:#ffffff;padding:16px;border-radius:16px;min-height:90px;">
+              <p style="margin:0 0 4px 0;font-size:12px;color:#64748b;font-weight:700;">${escapeHtml(labels.name)}</p>
+              <p style="margin:0;font-size:15px;color:#0f172a;">${escapeHtml(fullName)}</p>
+            </div>
+            <div style="background:#ffffff;padding:16px;border-radius:16px;min-height:90px;">
+              <p style="margin:0 0 4px 0;font-size:12px;color:#64748b;font-weight:700;">${escapeHtml(labels.degreeType)}</p>
+              <p style="margin:0;font-size:15px;color:#0f172a;">${escapeHtml(degreeType)}</p>
+            </div>
+            <div style="background:#ffffff;padding:16px;border-radius:16px;min-height:90px;">
+              <p style="margin:0 0 4px 0;font-size:12px;color:#64748b;font-weight:700;">${escapeHtml(labels.englishLevel)}</p>
+              <p style="margin:0;font-size:15px;color:#0f172a;">${escapeHtml(englishLevel)}</p>
+            </div>
+          </div>
+        </section>
+
+        <section style="margin-top:20px;padding:22px;border-radius:20px;background:#ffffff;">
+          <h2 style="margin:0 0 14px 0;font-size:18px;color:#0f172a;">${escapeHtml(labels.compatibility)}</h2>
+          <div style="display:flex;flex-wrap:wrap;gap:16px;align-items:center;justify-content:space-between;">
+            <div style="padding:18px;border-radius:18px;background:#f8fafc;flex:1;min-width:180px;">
+              <p style="margin:0 0 6px 0;font-size:12px;color:#64748b;">${escapeHtml(labels.scoreLabel)}</p>
+              <p style="margin:0;font-size:28px;font-weight:700;color:#0284c7;">${escapeHtml(scoreText)}</p>
+            </div>
+            <div style="flex:2;min-width:220px;">
+              <p style="margin:0 0 6px 0;font-size:12px;color:#64748b;font-weight:700;">${escapeHtml(labels.explanationLabel)}</p>
+              <p style="margin:0;font-size:13px;line-height:1.6;color:#334155;white-space:pre-wrap;unicode-bidi:plaintext;">${escapeHtml(explanation)}</p>
+            </div>
+          </div>
+        </section>
+
+        <section style="margin-top:20px;padding:22px;border-radius:20px;background:#f1f5f9;">
+          <h2 style="margin:0 0 16px 0;font-size:18px;color:#0f172a;">${escapeHtml(labels.nextSteps)}</h2>
+          <p style="margin:0 0 14px 0;font-size:13px;color:#475569;">${escapeHtml(labels.checklistIntro)}</p>
+          <ul style="margin:0;padding:0 0 0 20px;list-style:disc;font-size:13px;color:#334155;">
+            ${nextSteps.map((step) => `<li style="margin-bottom:10px;line-height:1.6;">${escapeHtml(step)}</li>`).join('')}
+          </ul>
+        </section>
+
+        <footer style="margin-top:28px;padding:18px 22px;border-radius:18px;background:#0284c7;color:#ffffff;display:flex;align-items:center;justify-content:${oppositeAlign};font-size:13px;">
+          <p style="margin:0;line-height:1.5;">${escapeHtml(labels.quote)}</p>
+        </footer>
+      </div>
+    </div>
+  `
+
+  wrapper.querySelectorAll('h1, h2, p, li').forEach((element) => {
+    element.style.direction = isArabic ? 'rtl' : 'ltr'
+  })
+
+  document.body.appendChild(wrapper)
+
+  try {
+    const canvas = await html2canvas(wrapper, {
+      backgroundColor: '#ffffff',
+      scale: 2,
+      useCORS: true,
+    })
+
+    const imageData = canvas.toDataURL('image/png')
+    const doc = new jsPDF({ unit: 'pt', format: 'a4', orientation: 'portrait' })
+    const pageWidth = doc.internal.pageSize.getWidth()
+    const pageHeight = doc.internal.pageSize.getHeight()
+    const margin = 18
+    const printableWidth = pageWidth - margin * 2
+    const printableHeight = pageHeight - margin * 2
+    const imageHeight = (canvas.height * printableWidth) / canvas.width
+
+    let positionY = margin
+    doc.addImage(imageData, 'PNG', margin, positionY, printableWidth, imageHeight)
+
+    if (imageHeight > printableHeight) {
+      let remainingHeight = imageHeight - printableHeight
+      while (remainingHeight > 0) {
+        positionY -= printableHeight
+        doc.addPage()
+        doc.addImage(imageData, 'PNG', margin, positionY, printableWidth, imageHeight)
+        remainingHeight -= printableHeight
+      }
+    }
+
+    const filename = `client-prospectus-${submission.access_code || submission.id || 'download'}.pdf`
+    doc.save(filename)
+  } finally {
+    document.body.removeChild(wrapper)
+  }
+}
+
 export async function exportSubmissionPdf(submission, language = 'en') {
   const isArabic = language === 'ar'
   const t = translations[language] || translations.en

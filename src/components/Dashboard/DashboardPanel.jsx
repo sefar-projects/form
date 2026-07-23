@@ -4,7 +4,7 @@ import { fetchUniversityCriteria } from '../../services/supabaseService'
 import { supabase } from '../../lib/supabase'
 import { translations } from '../../i18n/translations'
 import { calculateChances, suggestBestUniversity } from '../../utils/chancesCalculator'
-import { exportSubmissionPdf } from '../../utils/exportPdf'
+import { exportSubmissionPdf, exportClientPdf } from '../../utils/exportPdf'
 
 function parseObjectValue(value) {
   if (!value) return {}
@@ -282,6 +282,13 @@ function DashboardPanel({ language = 'en', onBack, onLogout }) {
                       </button>
                       <button type="button" onClick={() => exportSubmissionPdf(row, language)} className="text-sm font-semibold text-sky-700">
                         {t.exportPdfButton}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => exportClientPdf(row, language)}
+                        className="rounded-full bg-emerald-600 px-4 py-2 text-sm font-semibold text-white"
+                      >
+                        {t.sendClientProspectusButton}
                       </button>
                     </div>
                   </div>
