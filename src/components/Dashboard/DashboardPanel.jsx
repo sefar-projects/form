@@ -56,13 +56,19 @@ function getRecommendationScoreOutOf10(recommendation) {
   return Number(raw.toFixed(1))
 }
 
+function getLeadDisplayName(lead) {
+  const fullName = lead.name || `${lead.first_name || ''} ${lead.last_name || ''}`.trim()
+  return fullName || lead.email || lead.access_code || 'Unknown lead'
+}
+
 function DashboardPanel({ language = 'en', onBack, onLogout }) {
   const t = translations[language] || translations.en
   const [customerName, setCustomerName] = useState('')
   const [codes, setCodes] = useState([])
   const [submissions, setSubmissions] = useState([])
   const [loading, setLoading] = useState(false)
-  const [isRecomputing, setIsRecomputing] = useState(false)
+  const [isReevaluating, setIsReevaluating] = useState(false)
+  const [reevaluationProgress, setReevaluationProgress] = useState('')
   const [message, setMessage] = useState('')
   const [selectedSubmissionId, setSelectedSubmissionId] = useState(null)
 
@@ -119,54 +125,112 @@ function DashboardPanel({ language = 'en', onBack, onLogout }) {
     return countrySpecificData?._meta?.recommendation || null
   }
 
-  const recomputeLeadScores = async () => {
-    if (usedSubmissions.length === 0) {
-      setMessage('No submissions found to recompute.')
+  const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+
+  const handleReevaluateSingleLead = async (lead) => {
+    if (!lead?.id) {
+      setMessage('Invalid lead provided for re-evaluation.')
       return
     }
 
-    setIsRecomputing(true)
-    setMessage('Recomputing lead scores and recommendations...')
+    setIsReevaluating(true)
+    setMessage('Re-evaluating lead...')
+    setReevaluationProgress(`Processing 1/1: ${getLeadDisplayName(lead)}`)
 
     try {
-      const rules = await fetchUniversityCriteria()
-      let updatedCount = 0
+      const { data, error: functionError } = await supabase.functions.invoke('evaluate-study-path', {
+        body: lead,
+      })
 
-      for (const row of usedSubmissions) {
-        const leadData = buildLeadDataFromSubmission(row)
-        const aiScore = Number(row.study_path_score ?? 0)
+      if (functionError) {
+        throw functionError
+      }
 
-        const refreshedScore = calculateChances(leadData, rules, aiScore)
-        const recommendation = suggestBestUniversity(leadData, rules, refreshedScore)
+      const updatePayload = {
+        study_path_score: data?.relevance_score ?? null,
+        study_path_explanation: data?.reasoning ?? null,
+      }
 
-        const countrySpecificData = parseObjectValue(row.country_specific_data)
-        const updatedCountryData = {
-          ...countrySpecificData,
-          _meta: {
-            ...(countrySpecificData._meta || {}),
-            recommendation,
-          },
-        }
-
-        const { error } = await supabase
-          .from('leads')
-          .update({
-            agency_internal_score: refreshedScore,
-            country_specific_data: updatedCountryData,
-          })
-          .eq('id', row.id)
-
-        if (!error) {
-          updatedCount += 1
-        }
+      const { error: updateError } = await supabase.from('leads').update(updatePayload).eq('id', lead.id)
+      if (updateError) {
+        throw updateError
       }
 
       await loadData()
-      setMessage(`Recomputed ${updatedCount} lead(s) with fresh scoring and recommendation.`)
+      setMessage('Lead re-evaluated successfully.')
     } catch (error) {
-      setMessage(error.message || 'Unable to recompute lead scores right now.')
+      setMessage(error.message || 'Unable to re-evaluate the selected lead.')
     } finally {
-      setIsRecomputing(false)
+      setIsReevaluating(false)
+      setReevaluationProgress('')
+    }
+  }
+
+  const handleRecomputeOldLeads = async () => {
+    const confirmed = window.confirm('Are you sure you want to re-evaluate all existing leads? This will sequentially process each lead.')
+    if (!confirmed) {
+      return
+    }
+
+    setIsReevaluating(true)
+    setMessage('Starting re-evaluation for all leads...')
+    setReevaluationProgress('Preparing leads...')
+
+    try {
+      const { data: leads, error: fetchError } = await supabase.from('leads').select('*')
+      if (fetchError) {
+        throw fetchError
+      }
+
+      const allLeads = Array.isArray(leads) ? leads : []
+      const total = allLeads.length
+
+      if (total === 0) {
+        setMessage('No leads found to re-evaluate.')
+        setReevaluationProgress('')
+        return
+      }
+
+      let updatedCount = 0
+
+      for (let index = 0; index < total; index += 1) {
+        const lead = allLeads[index]
+        const leadName = getLeadDisplayName(lead)
+        setReevaluationProgress(`Processing ${index + 1}/${total}: ${leadName}`)
+
+        const { data, error: functionError } = await supabase.functions.invoke('evaluate-study-path', {
+          body: lead,
+        })
+
+        if (functionError) {
+          console.error('Edge function error for lead:', lead.id, functionError)
+          await delay(300)
+          continue
+        }
+
+        const updatePayload = {
+          study_path_score: data?.relevance_score ?? null,
+          study_path_explanation: data?.reasoning ?? null,
+        }
+
+        const { error: updateError } = await supabase.from('leads').update(updatePayload).eq('id', lead.id)
+        if (!updateError) {
+          updatedCount += 1
+        } else {
+          console.error('Supabase update error for lead:', lead.id, updateError)
+        }
+
+        await delay(300)
+      }
+
+      await loadData()
+      setMessage(`Re-evaluated ${updatedCount} of ${total} lead(s).`)
+      alert(`Re-evaluated ${updatedCount} of ${total} lead(s).`)
+    } catch (error) {
+      setMessage(error.message || 'Unable to re-evaluate old leads right now.')
+    } finally {
+      setIsReevaluating(false)
+      setReevaluationProgress('')
     }
   }
 
@@ -239,11 +303,11 @@ function DashboardPanel({ language = 'en', onBack, onLogout }) {
             <p className="text-sm text-slate-500">{usedSubmissions.length} {t.submissionsLabel.toLowerCase()}</p>
             <button
               type="button"
-              onClick={recomputeLeadScores}
-              disabled={isRecomputing}
+              onClick={handleRecomputeOldLeads}
+              disabled={isReevaluating}
               className="rounded-full border border-sky-200 px-3 py-1.5 text-xs font-semibold text-sky-700 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {isRecomputing ? 'Recomputing...' : 'Recompute old leads'}
+              {isReevaluating ? (reevaluationProgress || 'Processing...') : 'Recompute old leads'}
             </button>
           </div>
           <div className="mt-4 space-y-3">
