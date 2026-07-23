@@ -381,6 +381,17 @@ export async function exportClientPdf(submission, language = 'ar') {
     day: 'numeric',
   })
 
+  const countryData = parseObjectValue(submission.country_specific_data)
+  const recommendationScoreRaw = countryData?._meta?.recommendation?.recommendation_score
+  const recommendationScore = Number.isFinite(Number(recommendationScoreRaw))
+    ? Number(recommendationScoreRaw)
+    : null
+  const recommendationTeaser = recommendationScore !== null
+    ? (isArabic
+      ? `🎯 تطابق جامعي متاح في قاعدة بياناتنا! | نقاط احتمالية القبول: ${recommendationScore}/10. بمساعدة خبراء سيفار، ستضمن قبولك الجامعي. احجز استشارتك الآن للكشف عن الجامعة وبدء الإجراءات.`
+      : `🎯 Top University Match Found! | Acceptance Probability Score: ${recommendationScore}/10. With Sefar's expert assistance, you will secure this admission. Book your consultation to reveal the university and begin your journey.`)
+    : ''
+
   const wrapper = document.createElement('div')
   wrapper.style.position = 'fixed'
   wrapper.style.left = '0'
@@ -446,6 +457,12 @@ export async function exportClientPdf(submission, language = 'ar') {
           </div>
         </section>
 
+        ${recommendationTeaser ? `
+          <section style="margin-top:20px;padding:18px;border-radius:16px;background:#eff6ff;border:1px solid #bae6fd;">
+            <p style="margin:0;font-size:13px;line-height:1.6;color:#0f172a;white-space:pre-wrap;unicode-bidi:plaintext;">${escapeHtml(recommendationTeaser)}</p>
+          </section>
+        ` : ''}
+
         <section style="margin-top:20px;padding:22px;border-radius:20px;background:#f1f5f9;">
           <h2 style="margin:0 0 16px 0;font-size:18px;color:#0f172a;">${escapeHtml(labels.nextSteps)}</h2>
           <p style="margin:0 0 14px 0;font-size:13px;color:#475569;">${escapeHtml(labels.checklistIntro)}</p>
@@ -454,9 +471,9 @@ export async function exportClientPdf(submission, language = 'ar') {
           </ul>
         </section>
 
-        <footer style="margin-top:28px;padding:18px 22px;border-radius:18px;background:#0284c7;color:#ffffff;display:flex;align-items:center;justify-content:${oppositeAlign};font-size:13px;">
-          <p style="margin:0;line-height:1.5;">${escapeHtml(labels.quote)}</p>
-        </footer>
+        <div style="display:block;width:100%;box-sizing:border-box;padding:20px;text-align:center;background-color:#0284c7;color:#ffffff;border-radius:8px;margin-top:20px;overflow:hidden;page-break-inside:avoid;">
+          <p style="margin:0;font-size:13px;line-height:1.6;">${escapeHtml(labels.quote)}</p>
+        </div>
       </div>
     </div>
   `
