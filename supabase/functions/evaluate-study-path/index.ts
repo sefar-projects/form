@@ -8,38 +8,46 @@ serve(async (req: Request) => {
 
   try {
     const { previousDegree, targetDegree } = await req.json()
+    
     // @ts-ignore
-    const apiKey = Deno.env.get('GEMINI_API_KEY')
+    const apiKey = Deno.env.get('GEMINI_API_KEY') // Now holding your Groq key!
 
     if (!apiKey) {
-      throw new Error("GEMINI_API_KEY is completely missing from Supabase environment variables.")
+      throw new Error("API Key is missing from Supabase environment variables.")
     }
 
     const systemPrompt = `You are an expert international student visa officer. 
     Evaluate the logical progression between the applicant's previous academic background and their target university degree. 
     The inputs may be in Arabic, English, or a mix. Analyze them seamlessly.
-    Return ONLY a JSON object with no markdown formatting.
+    Return ONLY a JSON object.
     Format: {"relevance_score": number (0-10), "reasoning": "A concise, one-sentence explanation in English explaining why this progression makes sense or why it is a visa risk."}`
 
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`, {
+    // NEW: Calling Groq API using Llama 3.1 8B (Lightning fast and free)
+    const response = await fetch(`https://api.groq.com/openai/v1/chat/completions`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json' 
+      },
       body: JSON.stringify({
-        contents: [{
-          parts: [{ text: `${systemPrompt}\n\nPrevious Background: ${previousDegree}\nTarget Degree: ${targetDegree}` }]
-        }]
+        model: "llama-3.1-8b-instant",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: `Previous Background: ${previousDegree}\nTarget Degree: ${targetDegree}` }
+        ],
+        response_format: { type: "json_object" } // Forces perfect JSON output
       })
     })
 
     const data = await response.json()
 
-    // NEW: Safely check if Google Gemini rejected the API key
     if (data.error) {
-      console.error("Google Gemini API Error:", data.error)
-      throw new Error(`Gemini Error: ${data.error.message}`)
+      console.error("Groq API Error:", data.error)
+      throw new Error(`Groq Error: ${data.error.message}`)
     }
 
-    const rawText = data.candidates[0].content.parts[0].text
+    // Parse the Groq response
+    const rawText = data.choices[0].message.content
     const cleanJson = rawText.replace(/```json/g, '').replace(/```/g, '').trim()
     
     return new Response(cleanJson, {
@@ -47,7 +55,6 @@ serve(async (req: Request) => {
     })
 
   } catch (error: any) {
-    // NEW: This forces Supabase to print the error in red on your dashboard
     console.error("Function Crash Details:", error.message)
     
     return new Response(JSON.stringify({ error: error.message }), { 

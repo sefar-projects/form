@@ -93,13 +93,14 @@ function buildSectionRows(submission, isArabic, countryData) {
 }
 
 function renderSectionTable(title, rows, isArabic) {
+  const textAlign = isArabic ? 'right' : 'left'
   const renderedRows = rows.length > 0
-    ? rows.map(([label, value]) => `<tr><th>${escapeHtml(label)}</th><td>${escapeHtml(value)}</td></tr>`).join('')
-    : `<tr><td colspan="2">${escapeHtml(isArabic ? 'لا توجد بيانات' : 'No data')}</td></tr>`
+    ? rows.map(([label, value]) => `<tr><th style="width:35%;text-align:${textAlign};">${escapeHtml(label)}</th><td style="text-align:${textAlign};">${escapeHtml(value)}</td></tr>`).join('')
+    : `<tr><td colspan="2" style="text-align:${textAlign};">${escapeHtml(isArabic ? 'لا توجد بيانات' : 'No data')}</td></tr>`
 
   return `
     <section style="margin-bottom:14px;">
-      <h2 style="margin:0 0 8px 0;font-size:14px;color:#0f172a;background:#e2e8f0;padding:8px 10px;border-radius:8px;">${escapeHtml(title)}</h2>
+      <h2 style="margin:0 0 8px 0;font-size:14px;color:#0f172a;background:#e2e8f0;padding:8px 10px;border-radius:8px;text-align:${textAlign};">${escapeHtml(title)}</h2>
       <table style="width:100%;border-collapse:collapse;font-size:11px;background:#ffffff;">
         <tbody>
           ${renderedRows}
@@ -117,6 +118,7 @@ function getAiAlignmentLabel(score, isArabic) {
 
 function renderAiEvaluationSection(submission, isArabic) {
   const title = isArabic ? 'تقييم توافق المسار الأكاديمي بالذكاء الاصطناعي' : 'AI Academic Alignment Evaluation'
+  const textAlign = isArabic ? 'right' : 'left'
   const rawScore = submission.study_path_score
   const hasNumericScore = rawScore !== null && rawScore !== undefined && rawScore !== '' && !Number.isNaN(Number(rawScore))
   const numericScore = hasNumericScore ? Number(rawScore) : null
@@ -127,8 +129,8 @@ function renderAiEvaluationSection(submission, isArabic) {
   if (numericScore === null && !explanation) {
     return `
       <section style="margin-bottom:14px;">
-        <h2 style="margin:0 0 8px 0;font-size:14px;color:#0f172a;background:#e2e8f0;padding:8px 10px;border-radius:8px;">${escapeHtml(title)}</h2>
-        <div style="border:1px solid #e2e8f0;border-radius:8px;background:#ffffff;padding:10px;font-size:11px;color:#475569;">
+        <h2 style="margin:0 0 8px 0;font-size:14px;color:#0f172a;background:#e2e8f0;padding:8px 10px;border-radius:8px;text-align:${textAlign};">${escapeHtml(title)}</h2>
+        <div style="border:1px solid #e2e8f0;border-radius:8px;background:#ffffff;padding:10px;font-size:11px;color:#475569;text-align:${textAlign};">
           ${escapeHtml(isArabic ? 'التقييم قيد الانتظار.' : 'Evaluation pending.')}
         </div>
       </section>
@@ -143,15 +145,15 @@ function renderAiEvaluationSection(submission, isArabic) {
 
   return `
     <section style="margin-bottom:14px;">
-      <h2 style="margin:0 0 8px 0;font-size:14px;color:#0f172a;background:#e2e8f0;padding:8px 10px;border-radius:8px;">${escapeHtml(title)}</h2>
-      <div style="border:1px solid #e2e8f0;border-radius:8px;background:#ffffff;padding:10px;">
+      <h2 style="margin:0 0 8px 0;font-size:14px;color:#0f172a;background:#e2e8f0;padding:8px 10px;border-radius:8px;text-align:${textAlign};">${escapeHtml(title)}</h2>
+      <div style="border:1px solid #e2e8f0;border-radius:8px;background:#ffffff;padding:10px;text-align:${textAlign};">
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px;">
           <strong style="font-size:12px;color:#0f172a;">${escapeHtml(isArabic ? 'النتيجة' : 'Score')}: ${escapeHtml(scoreText)}</strong>
           <span style="display:inline-block;padding:2px 8px;border-radius:999px;background:#e2e8f0;color:#0f172a;font-size:11px;font-weight:600;">
             ${escapeHtml(label)}
           </span>
         </div>
-        <p style="margin:0;font-size:11px;line-height:1.5;color:#334155;white-space:pre-wrap;">${escapeHtml(explanationText)}</p>
+        <p style="margin:0;font-size:11px;line-height:1.5;color:#334155;white-space:pre-wrap;unicode-bidi:plaintext;">${escapeHtml(explanationText)}</p>
       </div>
     </section>
   `
@@ -160,12 +162,13 @@ function renderAiEvaluationSection(submission, isArabic) {
 function renderRecommendationSection(countryData, isArabic) {
   const recommendation = countryData?._meta?.recommendation
   const title = isArabic ? 'أفضل اقتراح جامعة ودولة' : 'Best University and Country Suggestion'
+  const textAlign = isArabic ? 'right' : 'left'
 
   if (!recommendation?.country || !recommendation?.university) {
     return `
       <section style="margin-bottom:14px;">
-        <h2 style="margin:0 0 8px 0;font-size:14px;color:#0f172a;background:#e2e8f0;padding:8px 10px;border-radius:8px;">${escapeHtml(title)}</h2>
-        <div style="border:1px solid #e2e8f0;border-radius:8px;background:#ffffff;padding:10px;font-size:11px;color:#475569;">
+        <h2 style="margin:0 0 8px 0;font-size:14px;color:#0f172a;background:#e2e8f0;padding:8px 10px;border-radius:8px;text-align:${textAlign};">${escapeHtml(title)}</h2>
+        <div style="border:1px solid #e2e8f0;border-radius:8px;background:#ffffff;padding:10px;font-size:11px;color:#475569;text-align:${textAlign};">
           ${escapeHtml(isArabic ? 'لا يوجد اقتراح متاح بعد.' : 'No recommendation available yet.')}
         </div>
       </section>
@@ -180,11 +183,11 @@ function renderRecommendationSection(countryData, isArabic) {
 
   return `
     <section style="margin-bottom:14px;">
-      <h2 style="margin:0 0 8px 0;font-size:14px;color:#0f172a;background:#e2e8f0;padding:8px 10px;border-radius:8px;">${escapeHtml(title)}</h2>
-      <div style="border:1px solid #e2e8f0;border-radius:8px;background:#ffffff;padding:10px;">
+      <h2 style="margin:0 0 8px 0;font-size:14px;color:#0f172a;background:#e2e8f0;padding:8px 10px;border-radius:8px;text-align:${textAlign};">${escapeHtml(title)}</h2>
+      <div style="border:1px solid #e2e8f0;border-radius:8px;background:#ffffff;padding:10px;text-align:${textAlign};">
         <p style="margin:0 0 6px 0;font-size:12px;color:#0f172a;"><strong>${escapeHtml(isArabic ? 'الاقتراح' : 'Suggested option')}:</strong> ${escapeHtml(recommendation.country)} - ${escapeHtml(recommendation.university)}</p>
         <p style="margin:0 0 6px 0;font-size:11px;color:#334155;"><strong>${escapeHtml(isArabic ? 'نقاط التوصية' : 'Recommendation score')}:</strong> ${escapeHtml(recommendationScoreOutOf10 ?? 'N/A')}/10</p>
-        <p style="margin:0;font-size:11px;line-height:1.5;color:#334155;white-space:pre-wrap;">${escapeHtml(reasons.join(' | ') || (isArabic ? 'لا توجد أسباب مفصلة.' : 'No detailed reasons.'))}</p>
+        <p style="margin:0;font-size:11px;line-height:1.5;color:#334155;white-space:pre-wrap;unicode-bidi:plaintext;">${escapeHtml(reasons.join(' | ') || (isArabic ? 'لا توجد أسباب مفصلة.' : 'No detailed reasons.'))}</p>
       </div>
     </section>
   `
@@ -332,6 +335,7 @@ export async function exportSubmissionPdf(submission, language = 'en') {
   const t = translations[language] || translations.en
   const title = isArabic ? 'تفاصيل الطلب' : 'Submission details'
   const subtitle = isArabic ? 'نموذج دراسة سيفار' : 'Sefar study form'
+  const textAlign = isArabic ? 'right' : 'left'
 
   const countryData = parseObjectValue(submission.country_specific_data)
   const scoreData = getChanceDetails(submission)
@@ -347,12 +351,12 @@ export async function exportSubmissionPdf(submission, language = 'en') {
 
   const countryRows = renderCountryTableRows(countryData, t)
   const countryRowsHtml = countryRows
-    .map(([country, field, value]) => `<tr><td>${escapeHtml(country)}</td><td>${escapeHtml(field)}</td><td>${escapeHtml(value)}</td></tr>`)
+    .map(([country, field, value]) => `<tr><td style="text-align:${textAlign};">${escapeHtml(country)}</td><td style="text-align:${textAlign};">${escapeHtml(field)}</td><td style="text-align:${textAlign};">${escapeHtml(value)}</td></tr>`)
     .join('')
 
   const chanceRows = renderChanceRows(scoreData, t, isArabic)
   const chanceRowsHtml = chanceRows
-    .map(([country, chance, details]) => `<tr><td>${escapeHtml(country)}</td><td>${escapeHtml(chance)}</td><td>${escapeHtml(details)}</td></tr>`)
+    .map(([country, chance, details]) => `<tr><td style="text-align:${textAlign};">${escapeHtml(country)}</td><td style="text-align:${textAlign};">${escapeHtml(chance)}</td><td style="text-align:${textAlign};unicode-bidi:plaintext;">${escapeHtml(details)}</td></tr>`)
     .join('')
 
   const wrapper = document.createElement('div')
@@ -369,7 +373,7 @@ export async function exportSubmissionPdf(submission, language = 'en') {
   wrapper.dir = isArabic ? 'rtl' : 'ltr'
 
   wrapper.innerHTML = `
-    <div style="border:1px solid #e2e8f0;border-radius:14px;padding:20px;background:#f8fafc;">
+    <div style="border:1px solid #e2e8f0;border-radius:14px;padding:20px;background:#f8fafc;text-align:${textAlign};">
       <h1 style="margin:0 0 4px 0;font-size:24px;color:#0f172a;">${escapeHtml(title)}</h1>
       <p style="margin:0 0 16px 0;font-size:13px;color:#475569;">${escapeHtml(subtitle)}</p>
 
@@ -377,31 +381,31 @@ export async function exportSubmissionPdf(submission, language = 'en') {
       ${aiEvaluationSectionHtml}
       ${recommendationSectionHtml}
 
-      <h2 style="font-size:16px;margin:16px 0 8px 0;">${escapeHtml(isArabic ? 'جدول بيانات الدول' : 'Country-specific details')}</h2>
+      <h2 style="font-size:16px;margin:16px 0 8px 0;text-align:${textAlign};">${escapeHtml(isArabic ? 'جدول بيانات الدول' : 'Country-specific details')}</h2>
       <table style="width:100%;border-collapse:collapse;margin-bottom:18px;font-size:11px;background:#ffffff;">
         <thead>
           <tr>
-            <th style="text-align:left;">${escapeHtml(isArabic ? 'الدولة' : 'Country')}</th>
-            <th style="text-align:left;">${escapeHtml(isArabic ? 'الحقل' : 'Field')}</th>
-            <th style="text-align:left;">${escapeHtml(isArabic ? 'القيمة' : 'Value')}</th>
+            <th style="text-align:${textAlign};">${escapeHtml(isArabic ? 'الدولة' : 'Country')}</th>
+            <th style="text-align:${textAlign};">${escapeHtml(isArabic ? 'الحقل' : 'Field')}</th>
+            <th style="text-align:${textAlign};">${escapeHtml(isArabic ? 'القيمة' : 'Value')}</th>
           </tr>
         </thead>
         <tbody>
-          ${countryRowsHtml || `<tr><td colspan="3">${escapeHtml(isArabic ? 'لا توجد بيانات' : 'No data')}</td></tr>`}
+          ${countryRowsHtml || `<tr><td colspan="3" style="text-align:${textAlign};">${escapeHtml(isArabic ? 'لا توجد بيانات' : 'No data')}</td></tr>`}
         </tbody>
       </table>
 
-      <h2 style="font-size:16px;margin:16px 0 8px 0;">${escapeHtml(isArabic ? 'نتائج نسبة القبول مع التفاصيل' : 'Chance calculator results with details')}</h2>
+      <h2 style="font-size:16px;margin:16px 0 8px 0;text-align:${textAlign};">${escapeHtml(isArabic ? 'نتائج نسبة القبول مع التفاصيل' : 'Chance calculator results with details')}</h2>
       <table style="width:100%;border-collapse:collapse;font-size:11px;background:#ffffff;">
         <thead>
           <tr>
-            <th style="text-align:left;">${escapeHtml(isArabic ? 'الدولة' : 'Country')}</th>
-            <th style="text-align:left;">${escapeHtml(isArabic ? 'النسبة' : 'Chance')}</th>
-            <th style="text-align:left;">${escapeHtml(isArabic ? 'سبب النتيجة' : 'Why this score')}</th>
+            <th style="text-align:${textAlign};">${escapeHtml(isArabic ? 'الدولة' : 'Country')}</th>
+            <th style="text-align:${textAlign};">${escapeHtml(isArabic ? 'النسبة' : 'Chance')}</th>
+            <th style="text-align:${textAlign};">${escapeHtml(isArabic ? 'سبب النتيجة' : 'Why this score')}</th>
           </tr>
         </thead>
         <tbody>
-          ${chanceRowsHtml || `<tr><td colspan="3">${escapeHtml(isArabic ? 'لا توجد بيانات' : 'No data')}</td></tr>`}
+          ${chanceRowsHtml || `<tr><td colspan="3" style="text-align:${textAlign};">${escapeHtml(isArabic ? 'لا توجد بيانات' : 'No data')}</td></tr>`}
         </tbody>
       </table>
     </div>
