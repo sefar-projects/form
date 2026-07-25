@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { createAccessCode, getAccessCodes } from '../../services/accessCodeService'
-import { fetchUniversityCriteria } from '../../services/supabaseService'
+import { evaluateStudyPath, fetchUniversityCriteria } from '../../services/supabaseService'
 import { supabase } from '../../lib/supabase'
 import { translations } from '../../i18n/translations'
 import { calculateChances, suggestBestUniversity } from '../../utils/chancesCalculator'
@@ -178,6 +178,7 @@ function DashboardPanel({ language = 'en', onBack, onLogout }) {
     setReevaluationProgress('Preparing leads...')
 
     try {
+      const universityRules = await fetchUniversityCriteria()
       const { data: leads, error: fetchError } = await supabase.from('leads').select('*')
       if (fetchError) {
         throw fetchError
@@ -199,19 +200,55 @@ function DashboardPanel({ language = 'en', onBack, onLogout }) {
         const leadName = getLeadDisplayName(lead)
         setReevaluationProgress(`Processing ${index + 1}/${total}: ${leadName}`)
 
-        const { data, error: functionError } = await supabase.functions.invoke('evaluate-study-path', {
-          body: normalizeLeadData(lead),
-        })
+        const existingCountryData = parseObjectValue(lead.country_specific_data)
+        const previousStudyPath = existingCountryData?._meta?.studyPath || {}
 
-        if (functionError) {
-          console.error('Edge function error for lead:', lead.id, functionError)
-          await delay(300)
-          continue
+        const rawLeadData = {
+          gpa: lead.gpa,
+          english_level: lead.english_level,
+          selected_countries: parseSelectedCountries(lead.selected_countries),
+          degree_type: lead.degree_type,
+          budget_availability: lead.budget_availability,
+          date_of_birth: lead.date_of_birth,
+          last_degree_date: lead.last_degree_date,
+          studied_in_english_before: lead.studied_in_english_before,
+          country_specific_data: existingCountryData,
+          previousDegree: previousStudyPath.previousDegree || '',
+          targetDegree: previousStudyPath.targetDegree || '',
+        }
+
+        const normalizedLead = normalizeLeadData(rawLeadData)
+        const aiResult = await evaluateStudyPath(normalizedLead)
+
+        const scorePayload = calculateChances(
+          normalizedLead,
+          universityRules,
+          aiResult.relevance_score,
+        )
+
+        const recommendation = suggestBestUniversity(
+          normalizedLead,
+          universityRules,
+          scorePayload,
+        )
+
+        const updatedCountryData = {
+          ...existingCountryData,
+          _meta: {
+            ...existingCountryData._meta,
+            studyPath: {
+              ...previousStudyPath,
+              ...aiResult,
+            },
+            recommendation,
+          },
         }
 
         const updatePayload = {
-          study_path_score: data?.relevance_score ?? null,
-          study_path_explanation: data?.reasoning ?? null,
+          study_path_score: aiResult.relevance_score ?? null,
+          study_path_explanation: aiResult.reasoning ?? null,
+          agency_internal_score: scorePayload,
+          country_specific_data: updatedCountryData,
         }
 
         const { error: updateError } = await supabase.from('leads').update(updatePayload).eq('id', lead.id)
@@ -225,8 +262,8 @@ function DashboardPanel({ language = 'en', onBack, onLogout }) {
       }
 
       await loadData()
-      setMessage(`Re-evaluated ${updatedCount} of ${total} lead(s).`)
-      alert(`Re-evaluated ${updatedCount} of ${total} lead(s).`)
+      setMessage(`Recomputed ${updatedCount} of ${total} lead(s).`)
+      alert(`Recomputed ${updatedCount} of ${total} lead(s).`)
     } catch (error) {
       setMessage(error.message || 'Unable to re-evaluate old leads right now.')
     } finally {

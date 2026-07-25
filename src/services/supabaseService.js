@@ -19,14 +19,14 @@ export async function fetchUniversityCriteria() {
   return data || []
 }
 
-export async function evaluateStudyPath(previousDegree, targetDegree) {
+export async function evaluateStudyPath(normalizedLeadInput = {}) {
   if (!supabase) {
     throw new Error('Supabase is not configured.')
   }
 
   try {
     const { data, error } = await supabase.functions.invoke('evaluate-study-path', {
-      body: { previousDegree, targetDegree }
+      body: normalizedLeadInput,
     })
 
     if (error) throw error
@@ -36,7 +36,6 @@ export async function evaluateStudyPath(previousDegree, targetDegree) {
       reasoning: data?.reasoning || '',
     }
   } catch (error) {
-    // FIXED: Instead of crashing the form, we catch the error, log it, and return a safe default
     console.error("Edge Function AI Error (Safe Fallback Used):", error)
     return {
       relevance_score: 5,

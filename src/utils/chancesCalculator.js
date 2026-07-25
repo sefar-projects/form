@@ -381,9 +381,13 @@ export function suggestBestUniversity(leadData, universityRules = [], chancesByC
     return null
   }
 
-  const selectedCountries = Array.isArray(leadData?.selected_countries)
-    ? leadData.selected_countries.map((country) => `${country || ''}`.trim().toLowerCase()).filter(Boolean)
+  const originalSelectedCountries = Array.isArray(leadData?.selected_countries)
+    ? leadData.selected_countries
     : []
+  const firstCountry = originalSelectedCountries.length > 0 ? originalSelectedCountries[0] : null
+  const selectedCountries = originalSelectedCountries
+    .map((country) => `${country || ''}`.trim().toLowerCase())
+    .filter(Boolean)
   const countrySpecificData = typeof leadData?.country_specific_data === 'object' && leadData.country_specific_data
     ? leadData.country_specific_data
     : {}
@@ -502,6 +506,15 @@ export function suggestBestUniversity(leadData, universityRules = [], chancesByC
       bestOption = option
     }
   })
+
+  if (bestOption && firstCountry && chancesByCountry[firstCountry]?.recommendationCap) {
+    const cap = Number(chancesByCountry[firstCountry].recommendationCap)
+    if (Number.isFinite(cap)) {
+      bestOption.recommendation_score = Math.min(bestOption.recommendation_score, cap)
+      bestOption.recommendation_score_100 = Math.round(bestOption.recommendation_score * 10)
+      bestOption.reasons.push(`Final recommendation capped at ${cap}/10 for ${firstCountry}.`)
+    }
+  }
 
   return bestOption
 }

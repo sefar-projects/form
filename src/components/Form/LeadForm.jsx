@@ -352,15 +352,6 @@ function LeadForm() {
       const targetDegree = `${firstCountryAnswers.desiredLevel || values.degreeType || ''} ${firstCountryAnswers.specialization1 || values.studyField || ''}`.trim()
       const previousDegree = `${values.degreeType || 'Previous degree'} in ${values.studyField || 'Unknown field'}`
 
-      const aiResult = await evaluateStudyPath(previousDegree, targetDegree)
-
-      countrySpecificData._meta.studyPath = {
-        previousDegree,
-        targetDegree,
-        score: aiResult.relevance_score,
-        reasoning: aiResult.reasoning,
-      }
-
       const rawLeadData = {
         gpa: values.finalMark,
         english_level: englishLevelForScoring,
@@ -371,9 +362,20 @@ function LeadForm() {
         last_degree_date: values.lastDegreeDate,
         studied_in_english_before: values.studiedInEnglishBefore,
         country_specific_data: countrySpecificData,
+        previousDegree,
+        targetDegree,
       }
 
       const normalizedLeadInput = normalizeLeadData(rawLeadData)
+
+      const aiResult = await evaluateStudyPath(normalizedLeadInput)
+
+      countrySpecificData._meta.studyPath = {
+        previousDegree,
+        targetDegree,
+        score: aiResult.relevance_score,
+        reasoning: aiResult.reasoning,
+      }
 
       const scorePayload = calculateChances(
         normalizedLeadInput,

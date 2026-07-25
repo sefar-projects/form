@@ -1,11 +1,9 @@
-import { jsPDF } from 'jspdf'
-import html2canvas from 'html2canvas'
-import { translations } from '../i18n/translations'
+﻿import { translations } from '../i18n/translations'
 
 function formatValue(value) {
   if (value === null || value === undefined || value === '') return '—'
-  if (Array.isArray(value)) return value.join(', ')
-  if (typeof value === 'object') return JSON.stringify(value)
+  if (Array.isArray(value)) return value.filter((item) => item !== null && item !== undefined).join(', ')
+  if (typeof value === 'object') return JSON.stringify(value, null, 2)
   return String(value)
 }
 
@@ -29,168 +27,257 @@ function pickFirstValue(...values) {
   return ''
 }
 
-function pushRowIfPresent(rows, labelAr, labelEn, value, isArabic) {
-  if (value === null || value === undefined || value === '') return
-  rows.push([isArabic ? labelAr : labelEn, formatValue(value)])
+function pushRowIfPresent(rows, label, value) {
+  const formatted = formatValue(value)
+  if (formatted && formatted !== '—') {
+    rows.push([label, formatted])
+  }
 }
 
 function buildSectionRows(submission, isArabic, countryData) {
-  const meta = countryData._meta || {}
-  const personalMeta = meta.personal || {}
-  const academicMeta = meta.academic || {}
-  const financialMeta = meta.financial || {}
-
-  const fullName = pickFirstValue(
-    submission.name,
-    `${submission.first_name || ''} ${submission.last_name || ''}`.trim(),
-  )
-
   const personalRows = []
   const academicRows = []
   const financialRows = []
 
-  pushRowIfPresent(personalRows, 'الاسم', 'Name', fullName, isArabic)
-  pushRowIfPresent(personalRows, 'البريد الإلكتروني', 'Email', submission.email, isArabic)
-  pushRowIfPresent(personalRows, 'رقم الهاتف', 'Phone', submission.phone_number, isArabic)
-  pushRowIfPresent(personalRows, 'تاريخ الميلاد', 'Date of birth', submission.date_of_birth, isArabic)
-  pushRowIfPresent(personalRows, 'الجنسية', 'Nationality', pickFirstValue(personalMeta.nationality, submission.nationality), isArabic)
-  pushRowIfPresent(personalRows, 'لديه جنسية/إقامة أخرى', 'Has other nationality/residency', personalMeta.hasOtherNationalityOrResidency, isArabic)
-  pushRowIfPresent(personalRows, 'تفاصيل الجنسية/الإقامة الأخرى', 'Other nationality/residency details', personalMeta.otherNationalityOrResidencyDetails, isArabic)
-  pushRowIfPresent(personalRows, 'يملك جواز سفر', 'Has passport', personalMeta.hasPassport, isArabic)
-  pushRowIfPresent(personalRows, 'تاريخ انتهاء الجواز', 'Passport expiry date', personalMeta.passportExpiryDate, isArabic)
-  pushRowIfPresent(personalRows, 'اسم الأب/الأم', 'Parent name', personalMeta.parentName, isArabic)
-  pushRowIfPresent(personalRows, 'هاتف الأب/الأم', 'Parent phone', personalMeta.parentPhone, isArabic)
-  pushRowIfPresent(personalRows, 'رمز الوصول', 'Access code', submission.access_code, isArabic)
-
-  pushRowIfPresent(academicRows, 'نوع الشهادة', 'Degree type', submission.degree_type, isArabic)
-  pushRowIfPresent(academicRows, 'التخصص العام', 'General study field', pickFirstValue(academicMeta.studyField, countryData._meta?.studyField), isArabic)
-  pushRowIfPresent(academicRows, 'المعدل النهائي', 'Final mark', submission.gpa, isArabic)
-  pushRowIfPresent(academicRows, 'مستوى الإنجليزية', 'English level', submission.english_level, isArabic)
-  pushRowIfPresent(academicRows, 'تاريخ آخر شهادة', 'Last degree date', academicMeta.lastDegreeDate, isArabic)
-  pushRowIfPresent(academicRows, 'سنوات الفراغ', 'Gap years', academicMeta.gapYears, isArabic)
-  pushRowIfPresent(academicRows, 'شرح سنوات الفراغ', 'Gap years explanation', academicMeta.gapYearsExplanation, isArabic)
-  pushRowIfPresent(academicRows, 'نوع شهادة اللغة', 'Language certificate type', academicMeta.languageCertificateType, isArabic)
-  pushRowIfPresent(academicRows, 'اسم شهادة اللغة', 'Language certificate name', academicMeta.languageCertificateName, isArabic)
-  pushRowIfPresent(academicRows, 'علامة شهادة اللغة', 'Language certificate score', academicMeta.languageCertificateScore, isArabic)
-  pushRowIfPresent(academicRows, 'تاريخ شهادة اللغة', 'Language certificate date', academicMeta.languageCertificateDate, isArabic)
-  pushRowIfPresent(academicRows, 'درس بالإنجليزية سابقًا', 'Studied in English before', academicMeta.studiedInEnglishBefore, isArabic)
-  pushRowIfPresent(academicRows, 'البلدان المختارة', 'Selected countries', submission.selected_countries, isArabic)
-
-  pushRowIfPresent(financialRows, 'الجهة الممولة', 'Financial sponsor', submission.financial_sponsor, isArabic)
-  pushRowIfPresent(financialRows, 'تفاصيل كفالة الأقارب', 'Relatives sponsorship details', financialMeta.relativesSponsorDetails, isArabic)
-  pushRowIfPresent(financialRows, 'الدخل السنوي للممول', 'Sponsor annual income', financialMeta.annualSponsorIncome, isArabic)
-  pushRowIfPresent(financialRows, 'الحالة المهنية للممول', 'Sponsor employment status', financialMeta.sponsorEmploymentStatus, isArabic)
-  pushRowIfPresent(financialRows, 'نطاق ميزانية الرسوم', 'Tuition budget range', financialMeta.tuitionBudgetRange, isArabic)
-  pushRowIfPresent(financialRows, 'توفر الأموال', 'Funds availability timeline', financialMeta.fundsAvailabilityTimeline, isArabic)
-  pushRowIfPresent(financialRows, 'شرح وضع الأموال', 'Funds explanation', financialMeta.fundsExplanation, isArabic)
-  pushRowIfPresent(financialRows, 'معلومات إضافية', 'Additional information', financialMeta.additionalInfo, isArabic)
-
-  return {
-    personalRows,
-    academicRows,
-    financialRows,
+  const labels = {
+    fullName: isArabic ? 'الاسم الكامل' : 'Full name',
+    email: isArabic ? 'البريد الإلكتروني' : 'Email',
+    phone: isArabic ? 'رقم الهاتف' : 'Phone',
+    dob: isArabic ? 'تاريخ الميلاد' : 'Date of birth',
+    nationality: isArabic ? 'الجنسية' : 'Nationality',
+    accessCode: isArabic ? 'رمز الوصول' : 'Access code',
+    degreeType: isArabic ? 'نوع الدرجة' : 'Degree type',
+    finalMark: isArabic ? 'العلامة النهائية' : 'Final mark',
+    englishLevel: isArabic ? 'مستوى اللغة الإنجليزية' : 'English level',
+    languageCertificateType: isArabic ? 'شهادة اللغة' : 'Language certificate type',
+    languageCertificateScore: isArabic ? 'درجة شهادة اللغة' : 'Language certificate score',
+    selectedCountries: isArabic ? 'الدول المختارة' : 'Selected countries',
+    lastDegreeDate: isArabic ? 'تاريخ الشهادة الأخيرة' : 'Last degree date',
+    gapYears: isArabic ? 'سنوات الفاصل' : 'Gap years',
+    studiedInEnglish: isArabic ? 'هل درست باللغة الإنجليزية سابقًا؟' : 'Studied in English before',
+    sponsor: isArabic ? 'الراعي المالي' : 'Financial sponsor',
+    sponsorIncome: isArabic ? 'الدخل السنوي للراعي' : 'Sponsor income',
+    tuitionBudget: isArabic ? 'نطاق ميزانية الرسوم' : 'Tuition budget range',
+    fundsAvailability: isArabic ? 'توفر الأموال' : 'Funds availability timeline',
+    additionalInfo: isArabic ? 'معلومات إضافية' : 'Additional information',
   }
+
+  pushRowIfPresent(personalRows, labels.fullName, pickFirstValue(submission.name, `${submission.first_name || ''} ${submission.last_name || ''}`.trim()))
+  pushRowIfPresent(personalRows, labels.email, submission.email)
+  pushRowIfPresent(personalRows, labels.phone, submission.phone_number || submission.phone)
+  pushRowIfPresent(personalRows, labels.dob, submission.date_of_birth || submission.dob)
+  pushRowIfPresent(personalRows, labels.nationality, submission.nationality)
+  pushRowIfPresent(personalRows, labels.accessCode, submission.access_code)
+
+  pushRowIfPresent(academicRows, labels.degreeType, submission.degree_type || submission.degreeType)
+  pushRowIfPresent(academicRows, labels.finalMark, submission.gpa ?? submission.finalMark)
+  pushRowIfPresent(academicRows, labels.englishLevel, submission.english_level || submission.englishLevel)
+  pushRowIfPresent(academicRows, labels.languageCertificateType, submission.language_certificate_type || submission.languageCertificateType)
+  pushRowIfPresent(academicRows, labels.languageCertificateScore, submission.language_certificate_score || submission.languageCertificateScore)
+  pushRowIfPresent(academicRows, labels.selectedCountries, submission.selected_countries)
+  pushRowIfPresent(academicRows, labels.lastDegreeDate, submission.last_degree_date || submission.lastDegreeDate)
+  pushRowIfPresent(academicRows, labels.gapYears, submission.gap_years || submission.gapYears)
+  pushRowIfPresent(academicRows, labels.studiedInEnglish, submission.studied_in_english_before || submission.studiedInEnglishBefore)
+
+  pushRowIfPresent(financialRows, labels.sponsor, submission.financial_sponsor || submission.sponsor || submission.financialSponsor)
+  pushRowIfPresent(financialRows, labels.sponsorIncome, submission.sponsor_annual_income || submission.annualSponsorIncome || countryData?._meta?.financial?.annualSponsorIncome)
+  pushRowIfPresent(financialRows, labels.tuitionBudget, submission.budget_availability || submission.tuition_budget_range || submission.normalized_tuition_budget || submission.budget)
+  pushRowIfPresent(financialRows, labels.fundsAvailability, submission.funds_availability_timeline || submission.fundsAvailabilityTimeline)
+  pushRowIfPresent(financialRows, labels.additionalInfo, submission.additional_info || submission.additionalInfo)
+
+  return { personalRows, academicRows, financialRows }
 }
 
 function renderSectionTable(title, rows, isArabic) {
-  const textAlign = isArabic ? 'right' : 'left'
-  const renderedRows = rows.length > 0
-    ? rows.map(([label, value]) => `<tr><th style="width:35%;text-align:${textAlign};">${escapeHtml(label)}</th><td style="text-align:${textAlign};">${escapeHtml(value)}</td></tr>`).join('')
-    : `<tr><td colspan="2" style="text-align:${textAlign};">${escapeHtml(isArabic ? 'لا توجد بيانات' : 'No data')}</td></tr>`
+  if (!rows || rows.length === 0) return ''
+
+  const rowsHtml = rows.map(([label, value]) => `
+      <tr>
+        <th>${escapeHtml(label)}</th>
+        <td>${escapeHtml(value)}</td>
+      </tr>`).join('')
 
   return `
-    <section style="margin-bottom:14px;">
-      <h2 style="margin:0 0 8px 0;font-size:14px;color:#0f172a;background:#e2e8f0;padding:8px 10px;border-radius:8px;text-align:${textAlign};">${escapeHtml(title)}</h2>
-      <table style="width:100%;border-collapse:collapse;font-size:11px;background:#ffffff;">
-        <tbody>
-          ${renderedRows}
-        </tbody>
-      </table>
-    </section>
-  `
-}
-
-function getAiAlignmentLabel(score, isArabic) {
-  if (score >= 8) return isArabic ? 'توافق قوي' : 'Strong Alignment'
-  if (score < 5) return isArabic ? 'مخاطر فيزا مرتفعة' : 'High Visa Risk'
-  return isArabic ? 'توافق متوسط' : 'Moderate Alignment'
+    <h2>${escapeHtml(title)}</h2>
+    <table>
+      <tbody>${rowsHtml}</tbody>
+    </table>`
 }
 
 function renderAiEvaluationSection(submission, isArabic) {
-  const title = isArabic ? 'تقييم توافق المسار الأكاديمي بالذكاء الاصطناعي' : 'AI Academic Alignment Evaluation'
-  const textAlign = isArabic ? 'right' : 'left'
-  const rawScore = submission.study_path_score
-  const hasNumericScore = rawScore !== null && rawScore !== undefined && rawScore !== '' && !Number.isNaN(Number(rawScore))
-  const numericScore = hasNumericScore ? Number(rawScore) : null
-  const explanation = submission.study_path_explanation
-    ? String(submission.study_path_explanation).trim()
-    : ''
+  const countryData = parseObjectValue(submission.country_specific_data)
+  const studyPathMeta = parseObjectValue(countryData?._meta?.studyPath)
 
-  if (numericScore === null && !explanation) {
-    return `
-      <section style="margin-bottom:14px;">
-        <h2 style="margin:0 0 8px 0;font-size:14px;color:#0f172a;background:#e2e8f0;padding:8px 10px;border-radius:8px;text-align:${textAlign};">${escapeHtml(title)}</h2>
-        <div style="border:1px solid #e2e8f0;border-radius:8px;background:#ffffff;padding:10px;font-size:11px;color:#475569;text-align:${textAlign};">
-          ${escapeHtml(isArabic ? 'التقييم قيد الانتظار.' : 'Evaluation pending.')}
-        </div>
-      </section>
-    `
-  }
+  const score = pickFirstValue(submission.study_path_score, submission.studyPathScore, studyPathMeta?.score)
+  const explanation = pickFirstValue(
+    submission.study_path_explanation,
+    submission.studyPathExplanation,
+    studyPathMeta?.reasoning,
+  )
+  const previousDegree = studyPathMeta?.previousDegree
+  const targetDegree = studyPathMeta?.targetDegree
 
-  const label = numericScore === null ? (isArabic ? 'غير متاح' : 'Not available') : getAiAlignmentLabel(numericScore, isArabic)
-  const scoreText = numericScore === null
-    ? (isArabic ? 'قيد الانتظار' : 'Evaluation pending.')
-    : `${numericScore}/10`
-  const explanationText = explanation || (isArabic ? 'التقييم قيد الانتظار.' : 'Evaluation pending.')
+  const header = isArabic ? 'تقييم الذكاء الصناعي' : 'AI Evaluation'
+  const scoreLabel = isArabic ? 'درجة مسار الدراسة' : 'Study path score'
+  const previousLabel = isArabic ? 'الدرجة السابقة' : 'Previous degree'
+  const targetLabel = isArabic ? 'الدرجة المستهدفة' : 'Target degree'
+  const noData = isArabic ? 'لا يوجد تقييم متاح.' : 'No evaluation available.'
+
+  const details = []
+  if (score !== '') details.push(`${scoreLabel}: ${formatValue(score)}`)
+  if (previousDegree) details.push(`${previousLabel}: ${formatValue(previousDegree)}`)
+  if (targetDegree) details.push(`${targetLabel}: ${formatValue(targetDegree)}`)
+  details.push('')
+  details.push(formatValue(explanation) || noData)
 
   return `
-    <section style="margin-bottom:14px;">
-      <h2 style="margin:0 0 8px 0;font-size:14px;color:#0f172a;background:#e2e8f0;padding:8px 10px;border-radius:8px;text-align:${textAlign};">${escapeHtml(title)}</h2>
-      <div style="border:1px solid #e2e8f0;border-radius:8px;background:#ffffff;padding:10px;text-align:${textAlign};">
-        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px;">
-          <strong style="font-size:12px;color:#0f172a;">${escapeHtml(isArabic ? 'النتيجة' : 'Score')}: ${escapeHtml(scoreText)}</strong>
-          <span style="display:inline-block;padding:2px 8px;border-radius:999px;background:#e2e8f0;color:#0f172a;font-size:11px;font-weight:600;">
-            ${escapeHtml(label)}
-          </span>
-        </div>
-        <p style="margin:0;font-size:11px;line-height:1.5;color:#334155;white-space:pre-wrap;unicode-bidi:plaintext;">${escapeHtml(explanationText)}</p>
-      </div>
-    </section>
-  `
+    <h2>${escapeHtml(header)}</h2>
+    <div class="ai-box">${escapeHtml(details.join('\n'))}</div>`
 }
 
 function renderRecommendationSection(countryData, isArabic) {
-  const recommendation = countryData?._meta?.recommendation
-  const title = isArabic ? 'أفضل اقتراح جامعة ودولة' : 'Best University and Country Suggestion'
-  const textAlign = isArabic ? 'right' : 'left'
+  if (!countryData || typeof countryData !== 'object') return ''
 
-  if (!recommendation?.country || !recommendation?.university) {
-    return `
-      <section style="margin-bottom:14px;">
-        <h2 style="margin:0 0 8px 0;font-size:14px;color:#0f172a;background:#e2e8f0;padding:8px 10px;border-radius:8px;text-align:${textAlign};">${escapeHtml(title)}</h2>
-        <div style="border:1px solid #e2e8f0;border-radius:8px;background:#ffffff;padding:10px;font-size:11px;color:#475569;text-align:${textAlign};">
-          ${escapeHtml(isArabic ? 'لا يوجد اقتراح متاح بعد.' : 'No recommendation available yet.')}
-        </div>
-      </section>
-    `
+  const recommendation = parseObjectValue(countryData?._meta?.recommendation)
+  if (!recommendation || Object.keys(recommendation).length === 0) {
+    return ''
   }
 
-  const reasons = Array.isArray(recommendation.reasons) ? recommendation.reasons : []
-  const recommendationRawScore = Number(recommendation.recommendation_score)
-  const recommendationScoreOutOf10 = Number.isFinite(recommendationRawScore)
-    ? (recommendationRawScore > 10 ? Number((recommendationRawScore / 10).toFixed(1)) : Number(recommendationRawScore.toFixed(1)))
-    : null
+  const reasonsList = Array.isArray(recommendation.reasons) && recommendation.reasons.length > 0
+    ? recommendation.reasons.map((r) => `<li>${escapeHtml(String(r))}</li>`).join('')
+    : `<li>${escapeHtml(isArabic ? 'لا توجد أسباب محددة مقدمة' : 'No specific reasons provided')}</li>`
 
   return `
-    <section style="margin-bottom:14px;">
-      <h2 style="margin:0 0 8px 0;font-size:14px;color:#0f172a;background:#e2e8f0;padding:8px 10px;border-radius:8px;text-align:${textAlign};">${escapeHtml(title)}</h2>
-      <div style="border:1px solid #e2e8f0;border-radius:8px;background:#ffffff;padding:10px;text-align:${textAlign};">
-        <p style="margin:0 0 6px 0;font-size:12px;color:#0f172a;"><strong>${escapeHtml(isArabic ? 'الاقتراح' : 'Suggested option')}:</strong> ${escapeHtml(recommendation.country)} - ${escapeHtml(recommendation.university)}</p>
-        <p style="margin:0 0 6px 0;font-size:11px;color:#334155;"><strong>${escapeHtml(isArabic ? 'نقاط التوصية' : 'Recommendation score')}:</strong> ${escapeHtml(recommendationScoreOutOf10 ?? 'N/A')}/10</p>
-        <p style="margin:0;font-size:11px;line-height:1.5;color:#334155;white-space:pre-wrap;unicode-bidi:plaintext;">${escapeHtml(reasons.join(' | ') || (isArabic ? 'لا توجد أسباب مفصلة.' : 'No detailed reasons.'))}</p>
-      </div>
-    </section>
-  `
+    <h2>${escapeHtml(isArabic ? 'الجامعة والدولة الموصى بها' : 'Best University & Country Suggestion')}</h2>
+    <table>
+      <tbody>
+        <tr>
+          <td style="font-weight: 600; width: 35%;">${escapeHtml(isArabic ? 'الجامعة الموصى بها' : 'Suggested Option')}</td>
+          <td><strong>${escapeHtml(pickFirstValue(recommendation.country, recommendation.countryName) || '')} - ${escapeHtml(pickFirstValue(recommendation.university, recommendation.universityName) || '')}</strong></td>
+        </tr>
+        <tr>
+          <td style="font-weight: 600;">${escapeHtml(isArabic ? 'درجة التوصية' : 'Recommendation Score')}</td>
+          <td><span class="badge">${escapeHtml(String(recommendation.recommendation_score ?? recommendation.recommendationScore ?? 0))} / 10</span></td>
+        </tr>
+        <tr>
+          <td style="font-weight: 600;">${escapeHtml(isArabic ? 'سبب اختيار هذه الجامعة' : 'Why this score / reasons')}</td>
+          <td><ul style="margin: 0; padding-inline-start: 18px;">${reasonsList}</ul></td>
+        </tr>
+      </tbody>
+    </table>`
+}
+
+function humanizeLabel(key) {
+  return key
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replace(/[_\-]+/g, ' ')
+    .replace(/^./, (str) => str.toUpperCase())
+}
+
+function formatCountryValue(value) {
+  if (value === null || value === undefined || value === '') return '—'
+  if (Array.isArray(value)) return value.map((item) => formatCountryValue(item)).join(', ')
+  if (typeof value === 'object') {
+    return Object.entries(value)
+      .map(([subKey, subVal]) => `${humanizeLabel(subKey)}: ${formatCountryValue(subVal)}`)
+      .join(' | ')
+  }
+  return String(value)
+}
+
+function renderCountryTableRows(countryData) {
+  if (!countryData || typeof countryData !== 'object') {
+    return '<tbody><tr><td colspan="2">—</td></tr></tbody>'
+  }
+
+  const entries = Object.entries(countryData).filter(([key]) => key !== '_meta')
+  if (entries.length === 0) {
+    return '<tbody><tr><td colspan="2">—</td></tr></tbody>'
+  }
+
+  const rows = []
+  entries.forEach(([key, val]) => {
+    const label = humanizeLabel(key)
+
+    if (val && typeof val === 'object' && !Array.isArray(val)) {
+      rows.push(`
+        <tr>
+          <td colspan="2" style="font-weight: 700; background: #f8fafc; padding: 10px 8px;">${escapeHtml(label)}</td>
+        </tr>`)
+
+      Object.entries(val).forEach(([innerKey, innerVal]) => {
+        rows.push(`
+          <tr>
+            <td style="font-weight: 600; width: 40%;">${escapeHtml(humanizeLabel(innerKey))}</td>
+            <td>${escapeHtml(formatCountryValue(innerVal))}</td>
+          </tr>`)
+      })
+    } else {
+      rows.push(`
+        <tr>
+          <td style="font-weight: 600; width: 40%;">${escapeHtml(label)}</td>
+          <td>${escapeHtml(formatCountryValue(val))}</td>
+        </tr>`)
+    }
+  })
+
+  return `<tbody>${rows.join('')}</tbody>`
+}
+
+function formatBreakdown(breakdown) {
+  if (!breakdown) return ''
+  if (Array.isArray(breakdown)) {
+    return breakdown.map((item) => `- ${formatValue(item)}`).join('\n')
+  }
+  if (typeof breakdown === 'object') {
+    return Object.entries(breakdown)
+      .map(([key, value]) => `- ${key}: ${formatValue(value)}`)
+      .join('\n')
+  }
+  return formatValue(breakdown)
+}
+
+function formatWeakPoints(weakPoints) {
+  if (!weakPoints) return ''
+  if (Array.isArray(weakPoints)) {
+    return weakPoints.map((item) => `- ${formatValue(item)}`).join('\n')
+  }
+  return formatValue(weakPoints)
+}
+
+function renderChanceRows(scoreData, t, isArabic) {
+  const entries = Object.entries(scoreData || {})
+  if (entries.length === 0) {
+    const emptyLabel = isArabic ? 'لا توجد بيانات متاحة.' : 'No data available.'
+    return `<tbody><tr><td colspan="3">${escapeHtml(emptyLabel)}</td></tr></tbody>`
+  }
+
+  const rowsHtml = entries.map(([countryKey, result]) => {
+    const percentage = result && typeof result === 'object' && result.percentage !== undefined
+      ? String(result.percentage)
+      : ''
+
+    const explanationArray = Array.isArray(result?.explanation)
+      ? result.explanation
+      : result?.explanation ? [result.explanation] : []
+
+    const weakPointsArray = Array.isArray(result?.weak_points)
+      ? result.weak_points
+      : result?.weak_points ? [result.weak_points] : []
+
+    const combinedExplanation = [...explanationArray, ...weakPointsArray]
+      .filter((item) => item !== null && item !== undefined && item !== '')
+      .join(' | ') || '—'
+
+    return `
+      <tr>
+        <td>${escapeHtml(countryKey)}</td>
+        <td>${escapeHtml(percentage ? `${percentage}%` : '—')}</td>
+        <td>${escapeHtml(combinedExplanation)}</td>
+      </tr>`
+  }).join('')
+
+  return `<tbody>${rowsHtml}</tbody>`
 }
 
 function escapeHtml(value) {
@@ -202,444 +289,142 @@ function escapeHtml(value) {
     .replaceAll("'", '&#039;')
 }
 
-function getChanceDetails(submission) {
-  const stored = parseObjectValue(submission.agency_internal_score)
-  const hasDetails = Object.values(stored).some((item) => item && typeof item === 'object' && 'percentage' in item)
+function openPrintIframe(html) {
+  return new Promise((resolve, reject) => {
+    const iframe = document.createElement('iframe')
+    iframe.style.position = 'fixed'
+    iframe.style.width = '0'
+    iframe.style.height = '0'
+    iframe.style.border = '0'
+    iframe.style.visibility = 'hidden'
+    iframe.setAttribute('aria-hidden', 'true')
+    document.body.appendChild(iframe)
 
-  if (hasDetails) {
-    return stored
-  }
-
-  return {}
-}
-
-function renderBasicRows(submission, isArabic, countryData) {
-  return buildSectionRows(submission, isArabic, countryData)
-}
-
-function renderCountryTableRows(countryData, t) {
-  const rows = []
-
-  Object.entries(countryData).forEach(([countryKey, answers]) => {
-    if (countryKey === '_meta') return
-
-    Object.entries(answers || {}).forEach(([fieldId, answer]) => {
-      rows.push([
-        t.countryNames?.[countryKey] || countryKey,
-        t.countryFieldLabels?.[fieldId] || (fieldId === 'intendedStudyField' ? t.intendedStudyFieldLabel : fieldId),
-        formatValue(answer),
-      ])
-    })
-  })
-
-  return rows
-}
-
-function normalizeMinGpaDisplay(value, isArabic) {
-  if (value === null || value === undefined || value === '') {
-    return isArabic ? 'غير محدد' : 'N/A'
-  }
-
-  if (typeof value === 'number') {
-    return value > 0 ? `${value}/20` : (isArabic ? 'غير محدد' : 'N/A')
-  }
-
-  const text = String(value).trim()
-  const ratioMatch = text.match(/(\d+(?:\.\d+)?)\s*\/\s*(\d+(?:\.\d+)?)/)
-  if (ratioMatch) {
-    const numerator = Number(ratioMatch[1])
-    const denominator = Number(ratioMatch[2])
-    if (Number.isFinite(numerator) && Number.isFinite(denominator) && denominator > 0) {
-      return `${((numerator / denominator) * 20).toFixed(2)}/20`
+    const printWindow = iframe.contentWindow
+    if (!printWindow) {
+      document.body.removeChild(iframe)
+      reject(new Error('Unable to open print iframe.'))
+      return
     }
-  }
 
-  const numericMatch = text.match(/\d+(?:\.\d+)?/)
-  if (numericMatch) {
-    const numericValue = Number(numericMatch[0])
-    if (Number.isFinite(numericValue) && numericValue > 0) {
-      return `${numericValue}/20`
-    }
-  }
+    const printDocument = printWindow.document
+    printDocument.open()
+    printDocument.write(html)
+    printDocument.close()
 
-  return isArabic ? 'غير محدد' : 'N/A'
-}
-
-function renderChanceRows(scoreData, t, isArabic) {
-  const rows = []
-
-  Object.entries(scoreData).forEach(([countryKey, result]) => {
-    const countryName = t.countryNames?.[countryKey] || countryKey
-    const percentage = typeof result === 'object' ? result.percentage : result
-
-    let explanation = isArabic ? 'سجل قديم بدون تفاصيل كاملة.' : 'Legacy score record without full details.'
-    if (typeof result === 'object' && result.breakdown) {
-      const b = result.breakdown
-      const minGpaRaw = b.minimumRequiredGpa ?? b.minimumRequiredMark
-      const minGpaText = normalizeMinGpaDisplay(minGpaRaw, isArabic)
-
-      const baseScore = Number(b.baseScore ?? 0)
-      const gpaContribution = Number(b.gpaContribution ?? b.finalMarkContribution ?? 0)
-      const languageContribution = Number(b.languageContribution ?? 0)
-      const degreeContribution = Number(b.degreeContribution ?? 0)
-      const budgetContribution = Number(b.budgetContribution ?? 0)
-      const aiContribution = Number(b.aiContribution ?? 0)
-      const penalty = Number(b.totalPenalty ?? b.minimumMarkPenalty ?? 0)
-      const rawScore = Number(result.rawScore ?? 0)
-
-      const formula = isArabic
-        ? `المعادلة: ${baseScore.toFixed(1)} + ${gpaContribution.toFixed(1)} + ${languageContribution.toFixed(1)} + ${degreeContribution.toFixed(1)} + ${budgetContribution.toFixed(1)} + ${aiContribution.toFixed(1)} - ${penalty.toFixed(1)} = ${rawScore.toFixed(1)}`
-        : `Formula: ${baseScore.toFixed(1)} + ${gpaContribution.toFixed(1)} + ${languageContribution.toFixed(1)} + ${degreeContribution.toFixed(1)} + ${budgetContribution.toFixed(1)} + ${aiContribution.toFixed(1)} - ${penalty.toFixed(1)} = ${rawScore.toFixed(1)}`
-
-      const labels = isArabic
-        ? [
-          `الأساس ${baseScore.toFixed(1)}`,
-          `المعدل +${gpaContribution.toFixed(1)}`,
-          `اللغة +${languageContribution.toFixed(1)}`,
-          `الشهادة +${degreeContribution.toFixed(1)}`,
-          `الميزانية +${budgetContribution.toFixed(1)}`,
-          `المسار الدراسي +${aiContribution.toFixed(1)}`,
-          `الخصم -${penalty.toFixed(1)}`,
-          `الحد الأدنى للمعدل ${minGpaText}`,
-        ]
-        : [
-          `Base ${baseScore.toFixed(1)}`,
-          `GPA +${gpaContribution.toFixed(1)}`,
-          `Language +${languageContribution.toFixed(1)}`,
-          `Degree +${degreeContribution.toFixed(1)}`,
-          `Budget +${budgetContribution.toFixed(1)}`,
-          `AI +${aiContribution.toFixed(1)}`,
-          `Penalty -${penalty.toFixed(1)}`,
-          `Minimum GPA ${minGpaText}`,
-        ]
-
-      const detailedReasons = Array.isArray(result.explanation) ? result.explanation : []
-      const weakPoints = Array.isArray(result.weak_points) ? result.weak_points : []
-      const reasonText = [...detailedReasons, ...weakPoints].join(' | ')
-
-      explanation = [labels.join(' | '), formula, reasonText].filter(Boolean).join(' || ')
-
-      if (!explanation.trim()) {
-        explanation = isArabic ? 'لا توجد تفاصيل متاحة.' : 'No details available.'
+    const cleanup = () => {
+      if (iframe.parentNode) {
+        iframe.parentNode.removeChild(iframe)
       }
+      resolve()
     }
 
-    rows.push([countryName, `${percentage}%`, explanation])
-  })
+    printWindow.onafterprint = cleanup
+    printWindow.focus()
 
-  return rows
+    try {
+      printWindow.print()
+    } catch (error) {
+      cleanup()
+      reject(error)
+    }
+  })
 }
 
-export async function exportClientPdf(submission, language = 'ar') {
+export async function exportClientPdf(submission, language = 'en') {
   const isArabic = language === 'ar'
-  const labels = {
-    agencyName: isArabic ? 'سيفار للاستشارات التعليمية' : 'Sefar Educational Consultancy',
-    reportTitle: isArabic ? 'تقرير العميل' : 'Client Report',
-    reportDate: isArabic ? 'تاريخ التقرير' : 'Report date',
-    accessCode: isArabic ? 'رمز الوصول' : 'Access code',
-    applicantOverview: isArabic ? 'نظرة عامة عن المتقدم' : 'Applicant Overview',
-    name: isArabic ? 'الاسم' : 'Name',
-    degreeType: isArabic ? 'نوع الشهادة' : 'Degree type',
-    englishLevel: isArabic ? 'مستوى الإنجليزية' : 'English level',
-    compatibility: isArabic ? 'توافق المسار الأكاديمي' : 'Academic Path Compatibility',
-    scoreLabel: isArabic ? 'النتيجة' : 'Score',
-    explanationLabel: isArabic ? 'تفسير المسار الأكاديمي' : 'Explanation',
-    nextSteps: isArabic ? 'الخطوات التالية' : 'Next Steps',
-    checklistIntro: isArabic ? 'المستندات الموصى بها وخطوات المتابعة:' : 'Recommended documents and follow-up steps:',
-    quote: isArabic ? 'نحن نبني خطة قبول مخصصة لمستقبلك الدراسي.' : 'We build a tailored acceptance plan for your academic future.',
-  }
+  const title = isArabic ? 'تقرير العميل' : 'Client Report'
+  const fullName = formatValue(submission.name || `${submission.first_name || ''} ${submission.last_name || ''}`.trim())
+  const scoreText = Number.isFinite(Number(submission.study_path_score)) ? `${submission.study_path_score}/10` : 'N/A'
+  const explanation = submission.study_path_explanation ? formatValue(submission.study_path_explanation) : (isArabic ? 'لا يوجد شرح متاح.' : 'No explanation provided.')
+  const rows = buildSectionRows(submission, isArabic, parseObjectValue(submission.country_specific_data))
+  const personalHtml = renderSectionTable(isArabic ? 'المعلومات الشخصية' : 'Personal information', rows.personalRows, isArabic)
+  const academicHtml = renderSectionTable(isArabic ? 'المعلومات الأكاديمية' : 'Academic information', rows.academicRows, isArabic)
+  const financialHtml = renderSectionTable(isArabic ? 'المعلومات المالية' : 'Financial information', rows.financialRows, isArabic)
 
-  const fullName = pickFirstValue(
-    submission.name,
-    `${submission.first_name || ''} ${submission.last_name || ''}`.trim(),
-  ) || '—'
-
-  const degreeType = formatValue(submission.degree_type) || '—'
-  const englishLevel = formatValue(submission.english_level) || '—'
-  const scoreRaw = submission.study_path_score
-  const scoreNumber = Number(scoreRaw)
-  const scoreText = Number.isFinite(scoreNumber) ? `${scoreNumber}/10` : (isArabic ? 'غير متاح' : 'N/A')
-  const explanation = submission.study_path_explanation
-    ? String(submission.study_path_explanation).trim()
-    : (isArabic ? 'لا يوجد شرح متاح.' : 'No explanation available.')
-
-  const nextSteps = isArabic
-    ? [
-      'تحضير الشهادات مع تصديق الأبوستيل',
-      'حجز استشارة مع خبير سيفار',
-      'مراجعة متطلبات الجامعة والدولة المختارة',
-    ]
-    : [
-      'Prepare apostilled transcripts',
-      'Book a consultation with Sefar',
-      'Review your chosen university and country requirements',
-    ]
-
-  const reportDate = new Date().toLocaleDateString(isArabic ? 'ar-EG' : 'en-US', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  })
-
-  const countryData = parseObjectValue(submission.country_specific_data)
-  const recommendationScoreRaw = countryData?._meta?.recommendation?.recommendation_score
-  const recommendationScore = Number.isFinite(Number(recommendationScoreRaw))
-    ? Number(recommendationScoreRaw)
-    : null
-  const recommendationTeaser = recommendationScore !== null
-    ? (isArabic
-      ? `🎯 تطابق جامعي متاح في قاعدة بياناتنا! | نقاط احتمالية القبول: ${recommendationScore}/10. بمساعدة خبراء سيفار، ستضمن قبولك الجامعي. احجز استشارتك الآن للكشف عن الجامعة وبدء الإجراءات.`
-      : `🎯 Top University Match Found! | Acceptance Probability Score: ${recommendationScore}/10. With Sefar's expert assistance, you will secure this admission. Book your consultation to reveal the university and begin your journey.`)
-    : ''
-
-  const wrapper = document.createElement('div')
-  wrapper.style.position = 'fixed'
-  wrapper.style.left = '0'
-  wrapper.style.top = '0'
-  wrapper.style.width = '900px'
-  wrapper.style.background = '#ffffff'
-  wrapper.style.padding = '24px'
-  wrapper.style.color = '#0f172a'
-  wrapper.style.fontFamily = 'Arial, Tahoma, sans-serif'
-  wrapper.style.zIndex = '-1'
-  wrapper.style.pointerEvents = 'none'
-  wrapper.dir = isArabic ? 'rtl' : 'ltr'
-
-  const textAlign = isArabic ? 'right' : 'left'
-  const oppositeAlign = isArabic ? 'left' : 'right'
-
-  wrapper.innerHTML = `
-    <div style="border:1px solid #e2e8f0;border-radius:24px;padding:28px;background:#f8fafc;max-width:900px;">
-      <div style="border-radius:20px;background:#ffffff;padding:26px;box-shadow:0 24px 60px rgba(15,23,42,0.08);">
-        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:20px;flex-wrap:wrap;text-align:${textAlign};">
-          <div style="flex:1;min-width:240px;">
-            <p style="margin:0 0 10px 0;font-size:12px;font-weight:700;letter-spacing:0.08em;color:#0284c7;text-transform:uppercase;">${escapeHtml(labels.agencyName)}</p>
-            <h1 style="margin:0;font-size:28px;color:#0f172a;line-height:1.1;">${escapeHtml(labels.reportTitle)}</h1>
-          </div>
-          <div style="min-width:220px;">
-            <p style="margin:0 0 6px 0;font-size:12px;color:#475569;">${escapeHtml(labels.reportDate)}</p>
-            <p style="margin:0;font-size:14px;font-weight:700;color:#0f172a;">${escapeHtml(reportDate)}</p>
-            <div style="margin-top:14px;padding:12px 16px;border-radius:18px;background:#0284c7;color:#ffffff;font-size:12px;font-weight:700;display:inline-block;text-align:${textAlign};">
-              ${escapeHtml(labels.accessCode)}: ${escapeHtml(submission.access_code || '—')}
-            </div>
-          </div>
-        </div>
-
-        <section style="margin-top:28px;padding:22px;border-radius:20px;background:#f1f5f9;">
-          <h2 style="margin:0 0 14px 0;font-size:18px;color:#0f172a;">${escapeHtml(labels.applicantOverview)}</h2>
-          <div style="display:grid;gap:16px;grid-template-columns:repeat(3,minmax(0,1fr));font-size:13px;color:#334155;">
-            <div style="background:#ffffff;padding:16px;border-radius:16px;min-height:90px;">
-              <p style="margin:0 0 4px 0;font-size:12px;color:#64748b;font-weight:700;">${escapeHtml(labels.name)}</p>
-              <p style="margin:0;font-size:15px;color:#0f172a;">${escapeHtml(fullName)}</p>
-            </div>
-            <div style="background:#ffffff;padding:16px;border-radius:16px;min-height:90px;">
-              <p style="margin:0 0 4px 0;font-size:12px;color:#64748b;font-weight:700;">${escapeHtml(labels.degreeType)}</p>
-              <p style="margin:0;font-size:15px;color:#0f172a;">${escapeHtml(degreeType)}</p>
-            </div>
-            <div style="background:#ffffff;padding:16px;border-radius:16px;min-height:90px;">
-              <p style="margin:0 0 4px 0;font-size:12px;color:#64748b;font-weight:700;">${escapeHtml(labels.englishLevel)}</p>
-              <p style="margin:0;font-size:15px;color:#0f172a;">${escapeHtml(englishLevel)}</p>
-            </div>
-          </div>
-        </section>
-
-        <section style="margin-top:20px;padding:22px;border-radius:20px;background:#ffffff;">
-          <h2 style="margin:0 0 14px 0;font-size:18px;color:#0f172a;">${escapeHtml(labels.compatibility)}</h2>
-          <div style="display:flex;flex-wrap:wrap;gap:16px;align-items:center;justify-content:space-between;">
-            <div style="padding:18px;border-radius:18px;background:#f8fafc;flex:1;min-width:180px;">
-              <p style="margin:0 0 6px 0;font-size:12px;color:#64748b;">${escapeHtml(labels.scoreLabel)}</p>
-              <p style="margin:0;font-size:28px;font-weight:700;color:#0284c7;">${escapeHtml(scoreText)}</p>
-            </div>
-            <div style="flex:2;min-width:220px;">
-              <p style="margin:0 0 6px 0;font-size:12px;color:#64748b;font-weight:700;">${escapeHtml(labels.explanationLabel)}</p>
-              <p style="margin:0;font-size:13px;line-height:1.6;color:#334155;white-space:pre-wrap;unicode-bidi:plaintext;">${escapeHtml(explanation)}</p>
-            </div>
-          </div>
-        </section>
-
-        ${recommendationTeaser ? `
-          <section style="margin-top:20px;padding:18px;border-radius:16px;background:#eff6ff;border:1px solid #bae6fd;">
-            <p style="margin:0;font-size:13px;line-height:1.6;color:#0f172a;white-space:pre-wrap;unicode-bidi:plaintext;">${escapeHtml(recommendationTeaser)}</p>
-          </section>
-        ` : ''}
-
-        <section style="margin-top:20px;padding:22px;border-radius:20px;background:#f1f5f9;">
-          <h2 style="margin:0 0 16px 0;font-size:18px;color:#0f172a;">${escapeHtml(labels.nextSteps)}</h2>
-          <p style="margin:0 0 14px 0;font-size:13px;color:#475569;">${escapeHtml(labels.checklistIntro)}</p>
-          <ul style="margin:0;padding:0 0 0 20px;list-style:disc;font-size:13px;color:#334155;">
-            ${nextSteps.map((step) => `<li style="margin-bottom:10px;line-height:1.6;">${escapeHtml(step)}</li>`).join('')}
-          </ul>
-        </section>
-
-        <div style="display:block;width:100%;box-sizing:border-box;padding:20px;text-align:center;background-color:#0284c7;color:#ffffff;border-radius:8px;margin-top:20px;overflow:hidden;page-break-inside:avoid;">
-          <p style="margin:0;font-size:13px;line-height:1.6;">${escapeHtml(labels.quote)}</p>
-        </div>
-      </div>
-    </div>
-  `
-
-  wrapper.querySelectorAll('h1, h2, p, li').forEach((element) => {
-    element.style.direction = isArabic ? 'rtl' : 'ltr'
-  })
-
-  document.body.appendChild(wrapper)
-
-  try {
-    const canvas = await html2canvas(wrapper, {
-      backgroundColor: '#ffffff',
-      scale: 2,
-      useCORS: true,
-    })
-
-    const imageData = canvas.toDataURL('image/png')
-    const doc = new jsPDF({ unit: 'pt', format: 'a4', orientation: 'portrait' })
-    const pageWidth = doc.internal.pageSize.getWidth()
-    const pageHeight = doc.internal.pageSize.getHeight()
-    const margin = 18
-    const printableWidth = pageWidth - margin * 2
-    const printableHeight = pageHeight - margin * 2
-    const imageHeight = (canvas.height * printableWidth) / canvas.width
-
-    let positionY = margin
-    doc.addImage(imageData, 'PNG', margin, positionY, printableWidth, imageHeight)
-
-    if (imageHeight > printableHeight) {
-      let remainingHeight = imageHeight - printableHeight
-      while (remainingHeight > 0) {
-        positionY -= printableHeight
-        doc.addPage()
-        doc.addImage(imageData, 'PNG', margin, positionY, printableWidth, imageHeight)
-        remainingHeight -= printableHeight
-      }
+  const html = `<!DOCTYPE html>
+<html lang="${language}" dir="${isArabic ? 'rtl' : 'ltr'}">
+<head>
+  <meta charset="utf-8">
+  <title>${escapeHtml(title)}</title>
+  <style>
+    @media print {
+      @page { margin: 0; }
+      body { padding: 2cm; }
     }
+    body { font-family: Arial, sans-serif; color: #0f172a; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 11px; }
+    th, td { border: 1px solid #e2e8f0; padding: 8px; text-align: ${isArabic ? 'right' : 'left'}; vertical-align: top; }
+    th { background: #f8fafc; width: 35%; }
+    h2 { font-size: 14px; background: #e2e8f0; padding: 8px; border-radius: 4px; margin-bottom: 10px; }
+  </style>
+</head>
+<body>
+  <div style="margin-bottom: 20px; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px;">
+    <h1 style="font-size: 20px; margin: 0;">${escapeHtml(title)}</h1>
+  </div>
+  ${personalHtml}
+  ${academicHtml}
+  ${financialHtml}
+  <div class="ai-box" style="border:1px solid #e2e8f0;padding:12px;border-radius:8px;white-space:pre-wrap;unicode-bidi:plaintext;">
+    <h2>${escapeHtml(isArabic ? 'تقييم الذكاء الصناعي' : 'AI Evaluation')}</h2>
+    <p><strong>${escapeHtml(isArabic ? 'درجة مسار الدراسة' : 'Study path score')}:</strong> ${escapeHtml(scoreText)}</p>
+    <p>${escapeHtml(explanation)}</p>
+  </div>
+</body>
+</html>`
 
-    const filename = `client-prospectus-${submission.access_code || submission.id || 'download'}.pdf`
-    doc.save(filename)
-  } finally {
-    document.body.removeChild(wrapper)
-  }
+  return openPrintIframe(html)
 }
 
 export async function exportSubmissionPdf(submission, language = 'en') {
   const isArabic = language === 'ar'
-  const t = translations[language] || translations.en
-  const title = isArabic ? 'تفاصيل الطلب' : 'Submission details'
-  const subtitle = isArabic ? 'نموذج دراسة سيفار' : 'Sefar study form'
-  const textAlign = isArabic ? 'right' : 'left'
-
   const countryData = parseObjectValue(submission.country_specific_data)
-  const scoreData = getChanceDetails(submission)
-
-  const sectionRows = renderBasicRows(submission, isArabic, countryData)
-  const aiEvaluationSectionHtml = renderAiEvaluationSection(submission, isArabic)
-  const recommendationSectionHtml = renderRecommendationSection(countryData, isArabic)
+  const sectionRows = buildSectionRows(submission, isArabic, countryData)
   const sectionTablesHtml = [
-    renderSectionTable(isArabic ? 'البيانات الشخصية' : 'Personal details', sectionRows.personalRows, isArabic),
-    renderSectionTable(isArabic ? 'البيانات الأكاديمية' : 'Academic details', sectionRows.academicRows, isArabic),
-    renderSectionTable(isArabic ? 'البيانات المالية' : 'Financial details', sectionRows.financialRows, isArabic),
+    renderSectionTable(isArabic ? 'المعلومات الشخصية' : 'Personal information', sectionRows.personalRows, isArabic),
+    renderSectionTable(isArabic ? 'المعلومات الأكاديمية' : 'Academic information', sectionRows.academicRows, isArabic),
+    renderSectionTable(isArabic ? 'المعلومات المالية' : 'Financial information', sectionRows.financialRows, isArabic),
   ].join('')
 
-  const countryRows = renderCountryTableRows(countryData, t)
-  const countryRowsHtml = countryRows
-    .map(([country, field, value]) => `<tr><td style="text-align:${textAlign};">${escapeHtml(country)}</td><td style="text-align:${textAlign};">${escapeHtml(field)}</td><td style="text-align:${textAlign};">${escapeHtml(value)}</td></tr>`)
-    .join('')
+  const aiEvaluationSectionHtml = renderAiEvaluationSection(submission, isArabic)
+  const recommendationSectionHtml = renderRecommendationSection(countryData, isArabic)
+  const countryRowsHtml = renderCountryTableRows(countryData)
+  const chanceRowsHtml = renderChanceRows(parseObjectValue(submission.agency_internal_score), translations[language] || translations.en, isArabic)
 
-  const chanceRows = renderChanceRows(scoreData, t, isArabic)
-  const chanceRowsHtml = chanceRows
-    .map(([country, chance, details]) => `<tr><td style="text-align:${textAlign};">${escapeHtml(country)}</td><td style="text-align:${textAlign};">${escapeHtml(chance)}</td><td style="text-align:${textAlign};unicode-bidi:plaintext;">${escapeHtml(details)}</td></tr>`)
-    .join('')
-
-  const wrapper = document.createElement('div')
-  wrapper.style.position = 'fixed'
-  wrapper.style.left = '0'
-  wrapper.style.top = '0'
-  wrapper.style.width = '900px'
-  wrapper.style.background = '#ffffff'
-  wrapper.style.padding = '24px'
-  wrapper.style.color = '#0f172a'
-  wrapper.style.fontFamily = 'Arial, Tahoma, sans-serif'
-  wrapper.style.zIndex = '-1'
-  wrapper.style.pointerEvents = 'none'
-  wrapper.dir = isArabic ? 'rtl' : 'ltr'
-
-  wrapper.innerHTML = `
-    <div style="border:1px solid #e2e8f0;border-radius:14px;padding:20px;background:#f8fafc;text-align:${textAlign};">
-      <h1 style="margin:0 0 4px 0;font-size:24px;color:#0f172a;">${escapeHtml(title)}</h1>
-      <p style="margin:0 0 16px 0;font-size:13px;color:#475569;">${escapeHtml(subtitle)}</p>
-
-      ${sectionTablesHtml}
-      ${aiEvaluationSectionHtml}
-      ${recommendationSectionHtml}
-
-      <h2 style="font-size:16px;margin:16px 0 8px 0;text-align:${textAlign};">${escapeHtml(isArabic ? 'جدول بيانات الدول' : 'Country-specific details')}</h2>
-      <table style="width:100%;border-collapse:collapse;margin-bottom:18px;font-size:11px;background:#ffffff;">
-        <thead>
-          <tr>
-            <th style="text-align:${textAlign};">${escapeHtml(isArabic ? 'الدولة' : 'Country')}</th>
-            <th style="text-align:${textAlign};">${escapeHtml(isArabic ? 'الحقل' : 'Field')}</th>
-            <th style="text-align:${textAlign};">${escapeHtml(isArabic ? 'القيمة' : 'Value')}</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${countryRowsHtml || `<tr><td colspan="3" style="text-align:${textAlign};">${escapeHtml(isArabic ? 'لا توجد بيانات' : 'No data')}</td></tr>`}
-        </tbody>
-      </table>
-
-      <h2 style="font-size:16px;margin:16px 0 8px 0;text-align:${textAlign};">${escapeHtml(isArabic ? 'نتائج نسبة القبول مع التفاصيل' : 'Chance calculator results with details')}</h2>
-      <table style="width:100%;border-collapse:collapse;font-size:11px;background:#ffffff;">
-        <thead>
-          <tr>
-            <th style="text-align:${textAlign};">${escapeHtml(isArabic ? 'الدولة' : 'Country')}</th>
-            <th style="text-align:${textAlign};">${escapeHtml(isArabic ? 'النسبة' : 'Chance')}</th>
-            <th style="text-align:${textAlign};">${escapeHtml(isArabic ? 'سبب النتيجة' : 'Why this score')}</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${chanceRowsHtml || `<tr><td colspan="3" style="text-align:${textAlign};">${escapeHtml(isArabic ? 'لا توجد بيانات' : 'No data')}</td></tr>`}
-        </tbody>
-      </table>
+  const htmlContent = `
+  <!DOCTYPE html>
+  <html lang="${language}" dir="${isArabic ? 'rtl' : 'ltr'}">
+  <head>
+    <meta charset="utf-8">
+    <title>${escapeHtml(isArabic ? 'تفاصيل الطلب' : 'Submission Details')}</title>
+    <style>
+      @media print {
+        @page { margin: 0; }
+        body { padding: 2cm; }
+      }
+      body { font-family: Arial, sans-serif; color: #0f172a; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 11px; }
+      th, td { border: 1px solid #e2e8f0; padding: 8px; text-align: ${isArabic ? 'right' : 'left'}; vertical-align: top; }
+      th { background: #f8fafc; width: 35%; }
+      h2 { font-size: 14px; background: #e2e8f0; padding: 8px; border-radius: 4px; margin-bottom: 10px; }
+      .ai-box { border: 1px solid #e2e8f0; padding: 12px; border-radius: 8px; margin-bottom: 20px; white-space: pre-wrap; unicode-bidi: plaintext; }
+    </style>
+  </head>
+  <body>
+    <div style="margin-bottom: 20px; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px;">
+      <h1 style="font-size: 20px; margin: 0;">${escapeHtml(isArabic ? 'تفاصيل الطلب' : 'Submission details')}</h1>
     </div>
+    ${sectionTablesHtml}
+    ${aiEvaluationSectionHtml}
+    ${recommendationSectionHtml}
+    <h2>${escapeHtml(isArabic ? 'جدول بيانات الدول' : 'Country-specific details')}</h2>
+    <table>${countryRowsHtml}</table>
+    <h2>${escapeHtml(isArabic ? 'نتائج نسبة القبول مع التفاصيل' : 'Chance calculator results')}</h2>
+    <table>${chanceRowsHtml}</table>
+  </body>
+  </html>
   `
 
-  wrapper.querySelectorAll('th, td').forEach((cell) => {
-    cell.style.border = '1px solid #e2e8f0'
-    cell.style.padding = '6px'
-    cell.style.verticalAlign = 'top'
-  })
-
-  document.body.appendChild(wrapper)
-
-  try {
-    const canvas = await html2canvas(wrapper, {
-      backgroundColor: '#ffffff',
-      scale: 2,
-      useCORS: true,
-    })
-
-    const imageData = canvas.toDataURL('image/png')
-    const doc = new jsPDF({ unit: 'pt', format: 'a4', orientation: 'portrait' })
-    const pageWidth = doc.internal.pageSize.getWidth()
-    const pageHeight = doc.internal.pageSize.getHeight()
-    const margin = 16
-    const printableWidth = pageWidth - margin * 2
-    const printableHeight = pageHeight - margin * 2
-    const imageHeight = (canvas.height * printableWidth) / canvas.width
-
-    let renderedHeight = imageHeight
-    let positionY = margin
-
-    doc.addImage(imageData, 'PNG', margin, positionY, printableWidth, imageHeight)
-    renderedHeight -= printableHeight
-
-    while (renderedHeight > 0) {
-      positionY -= printableHeight
-      doc.addPage()
-      doc.addImage(imageData, 'PNG', margin, positionY, printableWidth, imageHeight)
-      renderedHeight -= printableHeight
-    }
-
-    doc.save(`submission-${submission.id || 'download'}.pdf`)
-  } finally {
-    document.body.removeChild(wrapper)
-  }
+  return openPrintIframe(htmlContent)
 }
