@@ -4,6 +4,7 @@ import { fetchUniversityCriteria } from '../../services/supabaseService'
 import { supabase } from '../../lib/supabase'
 import { translations } from '../../i18n/translations'
 import { calculateChances, suggestBestUniversity } from '../../utils/chancesCalculator'
+import { normalizeLeadData } from '../../utils/normalizeLead'
 import { exportSubmissionPdf, exportClientPdf } from '../../utils/exportPdf'
 
 function parseObjectValue(value) {
@@ -139,7 +140,7 @@ function DashboardPanel({ language = 'en', onBack, onLogout }) {
 
     try {
       const { data, error: functionError } = await supabase.functions.invoke('evaluate-study-path', {
-        body: lead,
+        body: normalizeLeadData(lead),
       })
 
       if (functionError) {
@@ -199,7 +200,7 @@ function DashboardPanel({ language = 'en', onBack, onLogout }) {
         setReevaluationProgress(`Processing ${index + 1}/${total}: ${leadName}`)
 
         const { data, error: functionError } = await supabase.functions.invoke('evaluate-study-path', {
-          body: lead,
+          body: normalizeLeadData(lead),
         })
 
         if (functionError) {

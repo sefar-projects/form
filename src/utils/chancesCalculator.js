@@ -1,3 +1,5 @@
+import { normalizeLeadData } from './normalizeLead'
+
 const languageScoreMap = {
   beginner: 0.6,
   intermediate: 0.8,
@@ -39,6 +41,14 @@ function parseLanguageLevel(languageLevel = '') {
   }
 
   return 0.75
+}
+
+function parseIeltsScoreToLanguageRatio(ieltsScore = 0) {
+  const score = Number(ieltsScore)
+  if (!Number.isFinite(score) || score <= 0) return 0.6
+  if (score >= 7) return 1
+  if (score >= 6) return 0.8
+  return 0.6
 }
 
 function parseDegreeBonus(degreeType = '') {
@@ -208,14 +218,15 @@ function isDegreeLevelSupported(rule, selectedTargetDegree) {
 }
 
 export function calculateChances(leadData, universityRules = [], aiStudyPathScore = 0) {
-  const normalizedMarkOn20 = normalizeGpaTo20Scale(leadData?.gpa)
+  const normalizedLead = normalizeLeadData(leadData || {})
+  const normalizedMarkOn20 = normalizedLead.normalized_gpa_on_20
   const normalizedMarkRatio = normalizedMarkOn20 / 20
-  const normalizedLanguage = parseLanguageLevel(leadData?.english_level)
-  const degreeBonusRatio = parseDegreeBonus(leadData?.degree_type)
-  const leadBudget = parseBudgetToNumber(leadData?.budget_availability)
-  const selectedCountries = Array.isArray(leadData?.selected_countries) ? leadData.selected_countries : []
-  const countrySpecificData = typeof leadData?.country_specific_data === 'object' && leadData.country_specific_data
-    ? leadData.country_specific_data
+  const normalizedLanguage = parseIeltsScoreToLanguageRatio(normalizedLead.normalized_ielts_score)
+  const degreeBonusRatio = parseDegreeBonus(normalizedLead.degree_type || normalizedLead.degreeType)
+  const leadBudget = parseBudgetToNumber(normalizedLead.normalized_budget_amount ?? normalizedLead.budget_availability ?? normalizedLead.budget)
+  const selectedCountries = Array.isArray(normalizedLead.selected_countries) ? normalizedLead.selected_countries : []
+  const countrySpecificData = typeof normalizedLead.country_specific_data === 'object' && normalizedLead.country_specific_data
+    ? normalizedLead.country_specific_data
     : {}
 
   const numericalAiScore = Number(aiStudyPathScore)
@@ -227,7 +238,7 @@ export function calculateChances(leadData, universityRules = [], aiStudyPathScor
   return selectedCountries.reduce((accumulator, countryName) => {
     const dynamicAnswers = countrySpecificData[countryName] || {}
     const preferredUniversity = dynamicAnswers.preferredUniversity || ''
-    const selectedTargetDegree = dynamicAnswers.desiredLevel || leadData?.degree_type || ''
+    const selectedTargetDegree = dynamicAnswers.desiredLevel || normalizedLead.degree_type || normalizedLead.degreeType || ''
     const rule = pickRuleForCountry(universityRules, countryName, preferredUniversity)
 
     const minimumGpa = parseMinimumGpaTo20Scale(rule?.minimum_gpa)
@@ -238,30 +249,42 @@ export function calculateChances(leadData, universityRules = [], aiStudyPathScor
     const maxAgeBachelor = Number(rule?.max_age_bachelor ?? 99)
     const maxAgeMaster = Number(rule?.max_age_master ?? 99)
 
-    const derivedGapYears = calculateGapYears(leadData?.date_of_birth, leadData?.last_degree_date)
-    const ageFromDob = calculateAgeFromDob(leadData?.date_of_birth)
-    const studiedInEnglishBefore = normalizeYesNo(leadData?.studied_in_english_before)
+    const derivedGapYears = calculateGapYears(normalizedLead.date_of_birth || normalizedLead.dob || normalizedLead.dateOfBirth, normalizedLead.last_degree_date || normalizedLead.lastDegreeDate)
+    const ageFromDob = calculateAgeFromDob(normalizedLead.date_of_birth || normalizedLead.dob || normalizedLead.dateOfBirth)
+    const studiedInEnglishBefore = normalizeYesNo(normalizedLead.studied_in_english_before || normalizedLead.studiedInEnglishBefore)
     const shouldBypassLanguagePenalty = acceptsEnglishMoi && studiedInEnglishBefore
 
     const baseScore = 20
-    const gpaContribution = normalizedMarkRatio * 32
-    const languageContribution = normalizedLanguage * 16
+    let gpaContribution = normalizedMarkRatio * 32
+    let languageContribution = normalizedLanguage * 16
     const degreeContribution = degreeBonusRatio * 8
-    const budgetContribution = minimumFee > 0 ? Math.min(1, leadBudget / minimumFee) * 14 : 14
+    let budgetContribution = minimumFee > 0 ? Math.min(1, leadBudget / minimumFee) * 14 : 14
     const aiContribution = aiScoreRatio * 20
 
     let penalties = 0
+    let failedCriticalRequirement = false
     const weakPoints = []
     const explanation = []
 
     if (rule && normalizedMarkOn20 < minimumGpa) {
-      penalties += 8
+      gpaContribution = Math.min(gpaContribution, 5)
+      penalties += 20
+      failedCriticalRequirement = true
       weakPoints.push(`GPA below university minimum (${normalizedMarkOn20.toFixed(1)}/20 vs ${minimumGpa}/20).`)
     }
 
     if (rule && minimumFee > 0 && leadBudget < minimumFee) {
-      penalties += 8
+      budgetContribution = 0
+      penalties += 15
+      failedCriticalRequirement = true
       weakPoints.push(`Budget appears below minimum fee requirement (${leadBudget} vs ${minimumFee}).`)
+    }
+
+    if (rule && minimumIelts > 0 && normalizedLead.normalized_ielts_score < minimumIelts) {
+      languageContribution = 0
+      penalties += 15
+      failedCriticalRequirement = true
+      weakPoints.push(`Language score below university IELTS requirement (${normalizedLead.normalized_ielts_score.toFixed(1)} vs ${minimumIelts}).`)
     }
 
     if (rule && derivedGapYears > maxGapYears) {
@@ -272,7 +295,8 @@ export function calculateChances(leadData, universityRules = [], aiStudyPathScor
     const lowerTarget = `${selectedTargetDegree}`.toLowerCase()
     const maxAge = lowerTarget.includes('master') ? maxAgeMaster : maxAgeBachelor
     if (rule && ageFromDob > maxAge) {
-      penalties += 6
+      penalties += 15
+      failedCriticalRequirement = true
       weakPoints.push(`Applicant age may exceed common threshold for ${selectedTargetDegree || 'selected degree'} (${ageFromDob} vs max ${maxAge}).`)
     }
 
@@ -303,12 +327,13 @@ export function calculateChances(leadData, universityRules = [], aiStudyPathScor
       + aiContribution
       - penalties
     const acceptancePercentage = Math.max(10, Math.min(96, Math.round(rawScore)))
+    const finalRecommendationCap = failedCriticalRequirement ? 4.5 : null
 
     explanation.unshift(
       `Base score: ${baseScore.toFixed(1)}`,
       `GPA contribution: ${gpaContribution.toFixed(1)} (${normalizedMarkOn20.toFixed(1)}/20)`,
-      `Language contribution: ${languageContribution.toFixed(1)} (${leadData?.english_level || 'not specified'})`,
-      `Degree contribution: ${degreeContribution.toFixed(1)} (${leadData?.degree_type || 'not specified'})`,
+      `Language contribution: ${languageContribution.toFixed(1)} (IELTS ${normalizedLead.normalized_ielts_score.toFixed(1)})`,
+      `Degree contribution: ${degreeContribution.toFixed(1)} (${normalizedLead.degree_type || normalizedLead.degreeType || 'not specified'})`,
       `Budget contribution: ${budgetContribution.toFixed(1)} (available ${leadBudget})`,
       `AI study path contribution: ${aiContribution.toFixed(1)} (${normalizedAiScore}/10)`,
     )
@@ -326,6 +351,7 @@ export function calculateChances(leadData, universityRules = [], aiStudyPathScor
     accumulator[countryName] = {
       percentage: acceptancePercentage,
       rawScore: Number(rawScore.toFixed(2)),
+      recommendationCap: finalRecommendationCap,
       breakdown: {
         baseScore: Number(baseScore.toFixed(2)),
         gpaContribution: Number(gpaContribution.toFixed(2)),
@@ -337,6 +363,7 @@ export function calculateChances(leadData, universityRules = [], aiStudyPathScor
         normalizedGpaOn20: Number(normalizedMarkOn20.toFixed(2)),
         minimumRequiredGpa: minimumGpa,
         minimumRequiredFee: minimumFee,
+        normalizedIeltsScore: Number(normalizedLead.normalized_ielts_score.toFixed(1)),
         calculatedGapYears: derivedGapYears,
         maxGapYears,
       },
@@ -361,12 +388,13 @@ export function suggestBestUniversity(leadData, universityRules = [], chancesByC
     ? leadData.country_specific_data
     : {}
 
-  const normalizedMarkOn20 = normalizeGpaTo20Scale(leadData?.gpa)
-  const leadBudget = parseBudgetToNumber(leadData?.budget_availability)
-  const normalizedLanguage = parseLanguageLevel(leadData?.english_level)
-  const derivedGapYears = calculateGapYears(leadData?.date_of_birth, leadData?.last_degree_date)
-  const ageFromDob = calculateAgeFromDob(leadData?.date_of_birth)
-  const studiedInEnglishBefore = normalizeYesNo(leadData?.studied_in_english_before)
+  const normalizedLead = normalizeLeadData(leadData || {})
+  const normalizedMarkOn20 = normalizedLead.normalized_gpa_on_20
+  const leadBudget = parseBudgetToNumber(normalizedLead.normalized_budget_amount ?? normalizedLead.budget_availability ?? normalizedLead.budget)
+  const normalizedLanguage = parseIeltsScoreToLanguageRatio(normalizedLead.normalized_ielts_score)
+  const derivedGapYears = calculateGapYears(normalizedLead.date_of_birth || normalizedLead.dob || normalizedLead.dateOfBirth, normalizedLead.last_degree_date || normalizedLead.lastDegreeDate)
+  const ageFromDob = calculateAgeFromDob(normalizedLead.date_of_birth || normalizedLead.dob || normalizedLead.dateOfBirth)
+  const studiedInEnglishBefore = normalizeYesNo(normalizedLead.studied_in_english_before || normalizedLead.studiedInEnglishBefore)
 
   const candidateRules = universityRules.filter((rule) => {
     if (selectedCountries.length === 0) return true
@@ -382,7 +410,7 @@ export function suggestBestUniversity(leadData, universityRules = [], chancesByC
   candidateRules.forEach((rule) => {
     const countryKey = `${rule.country || ''}`.trim()
     const dynamicAnswers = countrySpecificData[countryKey] || {}
-    const selectedTargetDegree = dynamicAnswers.desiredLevel || leadData?.degree_type || ''
+    const selectedTargetDegree = dynamicAnswers.desiredLevel || normalizedLead.degree_type || normalizedLead.degreeType || ''
     const chancePercentage = Number(chancesByCountry?.[countryKey]?.percentage ?? 0)
 
     const minimumGpa = parseMinimumGpaTo20Scale(rule?.minimum_gpa)
@@ -455,12 +483,18 @@ export function suggestBestUniversity(leadData, universityRules = [], chancesByC
     score += Math.max(0, Math.min(20, chancePercentage / 5))
 
     const boundedScore100 = Math.max(0, Math.min(100, Math.round(score)))
-    const boundedScore10 = Math.max(0, Math.min(10, Number((boundedScore100 / 10).toFixed(1))))
+    let boundedScore10 = Math.max(0, Math.min(10, Number((boundedScore100 / 10).toFixed(1))))
+    const countryCap = Number(chancesByCountry?.[countryKey]?.recommendationCap)
+    if (Number.isFinite(countryCap) && countryCap > 0 && boundedScore10 > countryCap) {
+      boundedScore10 = countryCap
+      reasons.push(`Recommendation capped at ${countryCap}/10 due to a critical requirement failure.`)
+    }
+
     const option = {
       country: rule.country,
       university: rule.university,
       recommendation_score: boundedScore10,
-      recommendation_score_100: boundedScore100,
+      recommendation_score_100: Math.round(boundedScore10 * 10),
       reasons,
     }
 
