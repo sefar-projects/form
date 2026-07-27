@@ -1,4 +1,5 @@
 ﻿import { translations } from '../i18n/translations'
+import logoPath from '../assets/logo.png'
 
 function formatValue(value) {
   if (value === null || value === undefined || value === '') return '—'
@@ -333,43 +334,168 @@ function openPrintIframe(html) {
 
 export async function exportClientPdf(submission, language = 'en') {
   const isArabic = language === 'ar'
-  const title = isArabic ? 'تقرير العميل' : 'Client Report'
-  const fullName = formatValue(submission.name || `${submission.first_name || ''} ${submission.last_name || ''}`.trim())
-  const scoreText = Number.isFinite(Number(submission.study_path_score)) ? `${submission.study_path_score}/10` : 'N/A'
-  const explanation = submission.study_path_explanation ? formatValue(submission.study_path_explanation) : (isArabic ? 'لا يوجد شرح متاح.' : 'No explanation provided.')
-  const rows = buildSectionRows(submission, isArabic, parseObjectValue(submission.country_specific_data))
-  const personalHtml = renderSectionTable(isArabic ? 'المعلومات الشخصية' : 'Personal information', rows.personalRows, isArabic)
-  const academicHtml = renderSectionTable(isArabic ? 'المعلومات الأكاديمية' : 'Academic information', rows.academicRows, isArabic)
-  const financialHtml = renderSectionTable(isArabic ? 'المعلومات المالية' : 'Financial information', rows.financialRows, isArabic)
+  const dir = isArabic ? 'rtl' : 'ltr'
+  const textAlign = isArabic ? 'right' : 'left'
+  const countryData = parseObjectValue(submission.country_specific_data)
+  const recommendation = parseObjectValue(countryData?._meta?.recommendation)
+  const academicChanceData = parseObjectValue(submission.agency_internal_score)
+  const firstChanceEntry = Object.values(academicChanceData).find((entry) => entry && typeof entry === 'object' && entry.percentage !== undefined)
+  const academicChanceValue = firstChanceEntry?.percentage !== undefined
+    ? Number(firstChanceEntry.percentage)
+    : Number.isFinite(Number(submission.study_path_score))
+      ? Number(Math.round(Number(submission.study_path_score) * 10))
+      : NaN
+  const academicChance = Number.isFinite(academicChanceValue) ? `${academicChanceValue}%` : 'N/A'
+  const visaChanceValue = Number.isFinite(academicChanceValue) ? Math.min(75, academicChanceValue + 7) : null
+  const visaChance = visaChanceValue !== null ? `${visaChanceValue}%` : 'N/A'
+  const academicNum = parseInt(academicChance) || 0
+  const visaNum = parseInt(visaChance) || 0
+
+  const fullName = `${submission.first_name || ''} ${submission.last_name || ''}`.trim() || submission.name || 'Client'
+  const rawAiExplanation = submission.study_path_explanation ? String(submission.study_path_explanation) : (isArabic ? 'لا يوجد شرح متاح.' : 'No explanation provided.')
+  const englishOnlyExplanation = rawAiExplanation.split(/---|التقييم باللغة العربية/)[0].trim()
+  const academicExplanation = englishOnlyExplanation || (isArabic ? 'لا يوجد شرح متاح.' : 'No explanation provided.')
+  const maskedUniversity = recommendation?.university
+    ? `${recommendation.university.substring(0, 3)}*** University`
+    : 'Top Ranked University'
+
+  const universityTeaser = recommendation?.university
+    ? (isArabic
+      ? 'هذه فرصة مثيرة! تم تصنيف ملفك بشكل قوي لهذه الجامعة، ويمكننا مساعدتك على زيادة فرص قبولك بشكل أكبر من خلال خبرتنا.'
+      : 'This is an exciting opportunity! Your profile is already a strong match for this university, and with our expert support you can optimize your chances even further.')
+    : (isArabic
+      ? 'هذه فرصة ممتازة لتطوير ملفك معنا والحصول على أعلى فرص القبول.'
+      : 'This is a great opportunity to strengthen your file with us and maximize your admission chances.')
+
+  const rawReasons = Array.isArray(recommendation?.reasons) ? recommendation.reasons : []
+  const cleanReasons = rawReasons
+    .slice(0, 3)
+    .map((reason) => String(reason).replace(/\s*\(.*?\)/g, '').trim())
+    .filter(Boolean)
+
+  const reasonsList = cleanReasons.length > 0
+    ? cleanReasons.map((reason) => `<li>${escapeHtml(reason)}</li>`).join('')
+    : `<li>${escapeHtml(isArabic ? 'مطابقة عامة لمتطلبات القبول' : 'General match to admission requirements')}</li>`
 
   const html = `<!DOCTYPE html>
-<html lang="${language}" dir="${isArabic ? 'rtl' : 'ltr'}">
+<html lang="${language}" dir="${dir}">
 <head>
   <meta charset="utf-8">
-  <title>${escapeHtml(title)}</title>
+  <title>Sefar Travel Services - Evaluation Report</title>
   <style>
     @media print {
-      @page { margin: 0; }
-      body { padding: 2cm; }
+      @page { size: A4 portrait; margin: 0; }
+      body { padding: 10mm; }
     }
-    body { font-family: Arial, sans-serif; color: #0f172a; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-    table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 11px; }
-    th, td { border: 1px solid #e2e8f0; padding: 8px; text-align: ${isArabic ? 'right' : 'left'}; vertical-align: top; }
-    th { background: #f8fafc; width: 35%; }
-    h2 { font-size: 14px; background: #e2e8f0; padding: 8px; border-radius: 4px; margin-bottom: 10px; }
+    body {
+      font-family: 'Segoe UI', Tahoma, Arial, sans-serif;
+      color: #1e293b;
+      margin: 0;
+      direction: ${dir};
+      text-align: ${textAlign};
+      background-color: #ffffff;
+      font-size: 10px;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+    .header-box { border-bottom: 3px solid #0284c7; padding-bottom: 8px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+    .agency-title { font-size: 15px; font-weight: bold; color: #0284c7; margin: 0; }
+    .doc-title { font-size: 13px; font-weight: 600; color: #475569; margin: 4px 0 0 0; }
+    .meta-table { width: 100%; border-collapse: collapse; margin-bottom: 12px; font-size: 10.5px; }
+    .meta-table td { border: 1px solid #cbd5e1; padding: 7px 9px; }
+    .meta-table td:nth-child(odd) { background: #f8fafc; font-weight: bold; width: 25%; }
+    .badges-container { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 14px; margin: 10px 0; }
+    .badge-label { font-size: 10px; color: #475569; text-align: center; margin-top: 6px; font-weight: bold; }
+    .section-title { font-size: 12px; background: #0284c7; color: #ffffff; padding: 4px 8px; border-radius: 4px; margin: 10px 0 6px 0; font-weight: bold; }
+    .no-break { page-break-inside: avoid; }
+    .content-box { border: 1px solid #cbd5e1; padding: 8px; border-radius: 6px; background: #fafafa; font-size: 10px; line-height: 1.4; white-space: pre-wrap; unicode-bidi: plaintext; margin-bottom: 10px; }
+    .exciting-box { border: 2px solid #eab308; padding: 12px; border-radius: 8px; background: #fefce8; font-size: 11px; margin-bottom: 12px; box-shadow: 0 4px 6px -1px rgba(234, 179, 8, 0.2); }
+    .highlight-text { font-size: 14px; font-weight: bold; color: #a16207; }
+    .invoice-box { border: 2px dashed #059669; background: #ecfdf5; padding: 9px; border-radius: 6px; display: flex; justify-content: space-between; align-items: center; font-size: 10.5px; margin-bottom: 13px; gap: 10px; }
+    .promo-box { background: #e0f2fe; border-left: 4px solid #0284c7; padding: 10px; font-size: 11px; font-weight: bold; color: #0369a1; text-align: center; margin-bottom: 13px; }
+    .disclaimer { font-size: 9px; color: #64748b; border-top: 1px solid #e2e8f0; padding-top: 8px; margin-top: 13px; line-height: 1.4; }
+    .signature-area { margin-top: 22px; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 12px; font-size: 10.5px; font-weight: bold; }
+    .logo-img { max-height: 56px; width: auto; }
+    .no-break { page-break-inside: avoid; }
   </style>
 </head>
 <body>
-  <div style="margin-bottom: 20px; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px;">
-    <h1 style="font-size: 20px; margin: 0;">${escapeHtml(title)}</h1>
+  <div class="header-box no-break">
+    <div>
+      <p class="agency-title">${escapeHtml(isArabic ? 'وكالة سيفار ترافل سرفيس للاستشارات التعليمية' : 'Sefar Travel Services')}</p>
+      <p class="doc-title">${escapeHtml(isArabic ? 'تقرير تقييم استشاري وفاتورة خدمات' : 'Consulting Evaluation Report & Invoice')}</p>
+    </div>
+    <div style="text-align: ${isArabic ? 'left' : 'right'}; font-size: 10px; color: #64748b;">
+      <p style="margin: 0;"><strong>${escapeHtml(isArabic ? 'رقم المرجع' : 'Ref Code')}:</strong> ${escapeHtml(submission.access_code || '71998-STS')}</p>
+      <p style="margin: 2px 0 0 0;"><strong>${escapeHtml(isArabic ? 'تاريخ التقييم' : 'Date')}:</strong> ${escapeHtml(new Date().toLocaleDateString('en-GB'))}</p>
+    </div>
+    <div>
+      <img class="logo-img" src="${escapeHtml(logoPath)}" alt="Sefar Travel Services" />
+    </div>
   </div>
-  ${personalHtml}
-  ${academicHtml}
-  ${financialHtml}
-  <div class="ai-box" style="border:1px solid #e2e8f0;padding:12px;border-radius:8px;white-space:pre-wrap;unicode-bidi:plaintext;">
-    <h2>${escapeHtml(isArabic ? 'تقييم الذكاء الصناعي' : 'AI Evaluation')}</h2>
-    <p><strong>${escapeHtml(isArabic ? 'درجة مسار الدراسة' : 'Study path score')}:</strong> ${escapeHtml(scoreText)}</p>
-    <p>${escapeHtml(explanation)}</p>
+
+  <table class="meta-table no-break">
+    <tr>
+      <td>${escapeHtml(isArabic ? 'اسم الزبون' : 'Client Name')}</td>
+      <td>${escapeHtml(submission.first_name || submission.name || '')} ${escapeHtml(submission.last_name || '')}</td>
+      <td>${escapeHtml(isArabic ? 'الضامن المالي' : 'Financial Sponsor')}</td>
+      <td>${escapeHtml(submission.financial_sponsor || 'N/A')}</td>
+    </tr>
+    <tr>
+      <td>${escapeHtml(isArabic ? 'رقم الهوية / الجواز' : 'Passport / ID')}</td>
+      <td>${escapeHtml(submission.passport_number || submission.access_code || 'N/A')}</td>
+      <td>${escapeHtml(isArabic ? 'الوجهة والدرجة' : 'Destination & Degree')}</td>
+      <td>${escapeHtml(submission.selected_countries?.[0] || 'Poland')} | ${escapeHtml(submission.degree_type || 'Bachelor')}</td>
+    </tr>
+  </table>
+
+  <div class="badges-container no-break">
+    <div style="text-align: center;">
+      <div style="width: 90px; height: 90px; border-radius: 50%; background: conic-gradient(#0284c7 ${academicNum}%, #e2e8f0 0); display: flex; align-items: center; justify-content: center; margin: 0 auto;">
+        <div style="width: 72px; height: 72px; background: #fff; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 18px; color: #0f172a;">
+          ${academicNum}%
+        </div>
+      </div>
+      <div class="badge-label">${escapeHtml(isArabic ? 'نسبة القبول الأكاديمي' : 'Academic Acceptance Chance')}</div>
+    </div>
+    <div style="text-align: center;">
+      <div style="width: 90px; height: 90px; border-radius: 50%; background: conic-gradient(#059669 ${visaNum}%, #e2e8f0 0); display: flex; align-items: center; justify-content: center; margin: 0 auto;">
+        <div style="width: 72px; height: 72px; background: #fff; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 18px; color: #0f172a;">
+          ${visaNum}%
+        </div>
+      </div>
+      <div class="badge-label">${escapeHtml(isArabic ? 'نسبة نجاح الفيزا' : 'Visa Success Chance')}</div>
+    </div>
+  </div>
+
+  <div class="section-title">${escapeHtml(isArabic ? 'الجامعة الموصى بها' : 'Suggested University Match')}</div>
+  <div class="exciting-box">
+    <p style="margin: 0 0 6px 0;"><strong>${escapeHtml(isArabic ? 'الجامعة المقترحة' : 'Suggested University')}:</strong> <span class="highlight-text">🎉 ${escapeHtml(maskedUniversity)}</span></p>
+    <p style="margin: 0 0 4px 0;"><strong>${escapeHtml(isArabic ? 'أسباب الترشيح' : 'Reasons for Match')}:</strong></p>
+    <ul style="margin: 0; padding-inline-start: 18px;">${reasonsList}</ul>
+    <p style="margin: 10px 0 0 0; font-weight: 700; color: #0f172a;">${escapeHtml(universityTeaser)}</p>
+  </div>
+
+  <div class="section-title">${escapeHtml(isArabic ? 'التقييم الأكاديمي' : 'Academic Evaluation')}</div>
+  <div class="content-box">${escapeHtml(academicExplanation)}</div>
+
+  <div class="promo-box">
+    ${escapeHtml(isArabic ? 'مع وكالة سيفار، يمكنك تعزيز حظوظك بشكل كبير لضمان القبول الجامعي والتأشيرة!' : 'With Sefar Travel Services, you can significantly enhance your chances of securing your university admission and visa!')}
+  </div>
+
+  <div class="invoice-box">
+      <div><strong>${escapeHtml(isArabic ? 'رسوم التقييم' : 'Evaluation Fee')}:</strong> 10,000 DZD - ${escapeHtml(isArabic ? 'غير قابلة للاسترداد' : 'Non-refundable')}</div>
+      <div style="color: #059669; font-weight: bold; font-size: 13px; border: 1px solid #059669; padding: 4px 12px; border-radius: 4px;">${escapeHtml(isArabic ? 'تم الدفع / PAID' : 'PAID')}</div>
+  </div>
+
+  <div class="disclaimer">
+    <p style="margin: 0 0 4px 0;"><strong>${escapeHtml(isArabic ? 'تنويه هام للعميل' : 'Important Notice')}:</strong> ${escapeHtml(isArabic ? 'هذه الوثيقة والفاتورة تمثل تقييماً أولياً واستشارياً فقط لمدى قوة الملف، ولا تعني بأي حال من الأحوال أن إجراءات التسجيل الجامعي أو خطوات التأشيرة قد بدأت فعلياً. بدء الإجراءات يتطلب توقيع عقد منفصل بين العميل والوكالة.' : 'This document is a preliminary consultation and does not mean university or visa procedures have begun. Formal procedures require signing a separate contract.')}</p>
+    <p style="margin: 0;"><strong>${escapeHtml(isArabic ? 'إخلاء مسؤولية سيادي' : 'Sovereign Disclaimer')}:</strong> ${escapeHtml(isArabic ? 'تلفت انتباهكم أن أقصى نسبة مئوية تمنحها وكالتنا لحظوظ الفيزا لا تتجاوز 80% مهما كانت قوة الملف. النسبة المتبقية تعود بشكل مطلق وحصري للقرار السيادي للقنصل وللتقييم الشخصي للعميل يوم المقابلة. الوكالة تضمن صحة الإجراءات ولكنها لا تتدخل في القرارات السيادية للدول.' : 'Our maximum estimated visa chance never exceeds 80%. The remaining percentage depends entirely on the sovereign decision of the consulate. We guarantee the accuracy of our procedures but do not interfere with sovereign state decisions.')}</p>
+  </div>
+
+  <div class="signature-area">
+    <div>Sefar Travel Services</div>
+    <div>${escapeHtml(isArabic ? 'المستشار: أسامة لؤي منصورية' : 'Consultant: Oussama Louai eddine Mansouria')}</div>
   </div>
 </body>
 </html>`
