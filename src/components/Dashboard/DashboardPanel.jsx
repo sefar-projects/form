@@ -3,7 +3,7 @@ import { createAccessCode, getAccessCodes } from '../../services/accessCodeServi
 import { evaluateStudyPath, fetchUniversityCriteria } from '../../services/supabaseService'
 import { supabase } from '../../lib/supabase'
 import { translations } from '../../i18n/translations'
-import { calculateChances, suggestBestUniversity } from '../../utils/chancesCalculator'
+import { calculateChances, compareWithAllUniversities, suggestBestUniversity } from '../../utils/chancesCalculator'
 import { normalizeLeadData } from '../../utils/normalizeLead'
 import { exportSubmissionPdf, exportClientPdf } from '../../utils/exportPdf'
 
@@ -31,6 +31,7 @@ function parseSelectedCountries(value) {
 function buildLeadDataFromSubmission(row) {
   const countrySpecificData = parseObjectValue(row.country_specific_data)
   const academicMeta = countrySpecificData?._meta?.academic || {}
+  const subjectScores = academicMeta.subject_scores || {}
 
   return {
     gpa: row.gpa,
@@ -41,6 +42,14 @@ function buildLeadDataFromSubmission(row) {
     date_of_birth: row.date_of_birth,
     last_degree_date: row.last_degree_date || academicMeta.lastDegreeDate,
     studied_in_english_before: row.studied_in_english_before ?? academicMeta.studiedInEnglishBefore,
+    subject_scores: {
+      m_t: subjectScores.m_t,
+      phy: subjectScores.phy,
+      se: subjectScores.se,
+      lng: subjectScores.lng,
+      eco: subjectScores.eco,
+      geo_his: subjectScores.geo_his,
+    },
     country_specific_data: countrySpecificData,
   }
 }
@@ -67,11 +76,14 @@ function DashboardPanel({ language = 'en', onBack, onLogout }) {
   const [customerName, setCustomerName] = useState('')
   const [codes, setCodes] = useState([])
   const [submissions, setSubmissions] = useState([])
+  const [universityRules, setUniversityRules] = useState([])
   const [loading, setLoading] = useState(false)
   const [isReevaluating, setIsReevaluating] = useState(false)
   const [reevaluationProgress, setReevaluationProgress] = useState('')
   const [message, setMessage] = useState('')
   const [selectedSubmissionId, setSelectedSubmissionId] = useState(null)
+  const [matchResults, setMatchResults] = useState({})
+  const [matchingLeadId, setMatchingLeadId] = useState(null)
 
   const loadData = async () => {
     const rows = await getAccessCodes()
@@ -85,6 +97,16 @@ function DashboardPanel({ language = 'en', onBack, onLogout }) {
 
   useEffect(() => {
     loadData()
+    const loadUniversityRules = async () => {
+      try {
+        const rules = await fetchUniversityCriteria()
+        setUniversityRules(rules)
+      } catch {
+        setUniversityRules([])
+      }
+    }
+
+    loadUniversityRules()
   }, [])
 
   const handleCreate = async (event) => {
@@ -139,8 +161,10 @@ function DashboardPanel({ language = 'en', onBack, onLogout }) {
     setReevaluationProgress(`Processing 1/1: ${getLeadDisplayName(lead)}`)
 
     try {
+      const rawLeadData = buildLeadDataFromSubmission(lead)
+      const normalizedLead = normalizeLeadData(rawLeadData)
       const { data, error: functionError } = await supabase.functions.invoke('evaluate-study-path', {
-        body: normalizeLeadData(lead),
+        body: normalizedLead,
       })
 
       if (functionError) {
@@ -272,6 +296,33 @@ function DashboardPanel({ language = 'en', onBack, onLogout }) {
     }
   }
 
+  const runFullUniversityMatch = async (row) => {
+    if (!row?.id) {
+      setMessage('Invalid lead provided for university matching.')
+      return
+    }
+
+    const rules = universityRules.length > 0 ? universityRules : await fetchUniversityCriteria()
+    if (!Array.isArray(rules) || rules.length === 0) {
+      setMessage('University criteria are unavailable. Please try again later.')
+      return
+    }
+
+    setMatchingLeadId(row.id)
+    setMessage(`Running full university match for ${getLeadDisplayName(row)}...`)
+
+    try {
+      const rawLeadData = buildLeadDataFromSubmission(row)
+      const results = compareWithAllUniversities(rawLeadData, rules)
+      setMatchResults((current) => ({ ...current, [row.id]: results }))
+      setMessage(`University match complete for ${getLeadDisplayName(row)}.`)
+    } catch (error) {
+      setMessage(error?.message || 'Unable to run full university match.')
+    } finally {
+      setMatchingLeadId(null)
+    }
+  }
+
   const usedSubmissions = useMemo(() => submissions.filter((row) => row.access_code), [submissions])
 
   return (
@@ -345,7 +396,7 @@ function DashboardPanel({ language = 'en', onBack, onLogout }) {
               disabled={isReevaluating}
               className="rounded-full border border-sky-200 px-3 py-1.5 text-xs font-semibold text-sky-700 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {isReevaluating ? (reevaluationProgress || 'Processing...') : 'Recompute old leads'}
+              {isReevaluating ? (reevaluationProgress || 'Processing...') : 'Recompute all leads'}
             </button>
           </div>
           <div className="mt-4 space-y-3">
@@ -382,6 +433,21 @@ function DashboardPanel({ language = 'en', onBack, onLogout }) {
                       >
                         {selectedSubmissionId === row.id ? 'Hide details' : 'View details'}
                       </button>
+                      <button
+                        type="button"
+                        onClick={() => handleReevaluateSingleLead(row)}
+                        disabled={isReevaluating}
+                        className="rounded-full border border-sky-200 px-3 py-2 text-sm font-semibold text-sky-700 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {isReevaluating && reevaluationProgress.includes(getLeadDisplayName(row)) ? 'Recomputing...' : 'Recompute profile'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => runFullUniversityMatch(row)}
+                        className="rounded-full border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-700"
+                      >
+                        {matchingLeadId === row.id ? t.runningFullUniversityMatchButton : t.runFullUniversityMatchButton}
+                      </button>
                       <button type="button" onClick={() => exportSubmissionPdf(row, language)} className="text-sm font-semibold text-sky-700">
                         {t.exportPdfButton}
                       </button>
@@ -411,6 +477,42 @@ function DashboardPanel({ language = 'en', onBack, onLogout }) {
                             {(getRecommendationForRow(row).reasons || []).join(' | ')}
                           </p>
                         </>
+                      ) : null}
+
+                      {matchResults[row.id] ? (
+                        <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                          <h3 className="text-sm font-semibold text-slate-800">{t.universityMatchResultsTitle}</h3>
+                          <div className="mt-3 min-w-[720px]">
+                            <table className="w-full border-collapse text-left text-sm">
+                              <thead>
+                                <tr>
+                                  <th className="border-b border-slate-200 px-3 py-2 font-semibold text-slate-600">{t.universityNameColumn}</th>
+                                  <th className="border-b border-slate-200 px-3 py-2 font-semibold text-slate-600">{t.countryColumn}</th>
+                                  <th className="border-b border-slate-200 px-3 py-2 font-semibold text-slate-600">{t.matchPercentageColumn}</th>
+                                  <th className="border-b border-slate-200 px-3 py-2 font-semibold text-slate-600">{t.statusColumn}</th>
+                                  <th className="border-b border-slate-200 px-3 py-2 font-semibold text-slate-600">{t.missingRequirementsColumn}</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {matchResults[row.id].map((result) => (
+                                  <tr key={`${result.university}-${result.country}`} className="border-b border-slate-200 bg-white last:border-0">
+                                    <td className="px-3 py-3 text-slate-700">{result.university}</td>
+                                    <td className="px-3 py-3 text-slate-700">{result.country}</td>
+                                    <td className="px-3 py-3 font-semibold text-slate-800">{result.matchPercentage}%</td>
+                                    <td className="px-3 py-3">
+                                      <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${result.isMatch ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                                        {result.isMatch ? t.eligibleLabel : t.notEligibleLabel}
+                                      </span>
+                                    </td>
+                                    <td className="px-3 py-3 text-slate-700">
+                                      {result.missingRequirements.length > 0 ? result.missingRequirements.join(' • ') : 'None'}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
                       ) : null}
                     </div>
                   ) : null}

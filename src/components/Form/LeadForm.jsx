@@ -33,6 +33,12 @@ const initialValues = {
   lastDegreeDate: '',
   gapYears: '',
   gapYearsExplanation: '',
+  mathScore: '',
+  physicsScore: '',
+  scienceScore: '',
+  languagesScore: '',
+  economicsScore: '',
+  historyGeoScore: '',
   englishLevel: '',
   languageCertificateType: '',
   languageCertificateName: '',
@@ -328,6 +334,12 @@ function LeadForm() {
             lastDegreeDate: values.lastDegreeDate,
             gapYears: values.gapYears,
             gapYearsExplanation: values.gapYearsExplanation,
+            mathScore: values.mathScore,
+            physicsScore: values.physicsScore,
+            scienceScore: values.scienceScore,
+            languagesScore: values.languagesScore,
+            economicsScore: values.economicsScore,
+            historyGeoScore: values.historyGeoScore,
             languageCertificateType: values.languageCertificateType,
             languageCertificateName: values.languageCertificateName,
             languageCertificateScore: values.languageCertificateScore,
@@ -361,6 +373,14 @@ function LeadForm() {
         date_of_birth: values.dob,
         last_degree_date: values.lastDegreeDate,
         studied_in_english_before: values.studiedInEnglishBefore,
+        subject_scores: {
+          m_t: values.mathScore,
+          phy: values.physicsScore,
+          se: values.scienceScore,
+          lng: values.languagesScore,
+          eco: values.economicsScore,
+          geo_his: values.historyGeoScore,
+        },
         country_specific_data: countrySpecificData,
         previousDegree,
         targetDegree,
@@ -375,6 +395,15 @@ function LeadForm() {
         targetDegree,
         score: aiResult.relevance_score,
         reasoning: aiResult.reasoning,
+      }
+
+      countrySpecificData._meta.academic.subject_scores = {
+        m_t: values.mathScore,
+        phy: values.physicsScore,
+        se: values.scienceScore,
+        lng: values.languagesScore,
+        eco: values.economicsScore,
+        geo_his: values.historyGeoScore,
       }
 
       const scorePayload = calculateChances(

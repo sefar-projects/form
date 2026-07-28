@@ -376,6 +376,108 @@ export function calculateChances(leadData, universityRules = [], aiStudyPathScor
   }, {})
 }
 
+export function compareWithAllUniversities(normalizedLead, universityRules = []) {
+  const lead = normalizeLeadData(normalizedLead || {})
+  const leadAge = Number(lead.calculated_age || 0)
+  const leadGpa = Number(lead.normalized_gpa_on_20 || 0)
+  const leadIelts = Number(lead.normalized_ielts_score || 0)
+
+  const subjectScoresRaw = typeof lead.subject_scores === 'object' && lead.subject_scores
+    ? lead.subject_scores
+    : typeof lead.country_specific_data === 'object' && lead.country_specific_data
+      ? lead.country_specific_data?._meta?.academic?.subject_scores || {}
+      : {}
+
+  const parseRequirementValue = (value) => {
+    if (value === null || value === undefined || value === '') return null
+    if (typeof value === 'number') return Number(value)
+    const match = `${value}`.trim().match(/(\d+(?:\.\d+)?)/)
+    return match ? Number(match[1]) : null
+  }
+
+  const parseScoreValue = (value) => {
+    if (value === null || value === undefined || value === '') return null
+    const numeric = Number(value)
+    return Number.isFinite(numeric) ? numeric : null
+  }
+
+  const leadSubjects = {
+    m_t: parseScoreValue(subjectScoresRaw.m_t),
+    phy: parseScoreValue(subjectScoresRaw.phy),
+    se: parseScoreValue(subjectScoresRaw.se),
+    lng: parseScoreValue(subjectScoresRaw.lng),
+    eco: parseScoreValue(subjectScoresRaw.eco),
+    geo_his: parseScoreValue(subjectScoresRaw.geo_his),
+  }
+
+  return (Array.isArray(universityRules) ? universityRules : []).map((rule) => {
+    const missingRequirements = []
+    let matchedCount = 0
+    let totalCount = 0
+
+    const rulesToEvaluate = [
+      { key: 'minimum_gpa', label: 'GPA', leadValue: leadGpa, requirementValue: parseMinimumGpaTo20Scale(rule?.minimum_gpa), compare: (leadValue, reqValue) => leadValue >= reqValue },
+      { key: 'minimum_fee', label: 'Tuition fee', leadValue: Number(lead.normalized_budget_amount || lead.budget_availability || 0), requirementValue: parseRequirementValue(rule?.minimum_fee), compare: (leadValue, reqValue) => reqValue === null || leadValue >= reqValue },
+      { key: 'minimum_ielts', label: 'IELTS', leadValue: leadIelts, requirementValue: parseRequirementValue(rule?.minimum_ielts), compare: (leadValue, reqValue) => reqValue === null || leadValue >= reqValue },
+      { key: 'max_age_bachelor', label: 'Maximum age', leadValue: leadAge, requirementValue: parseRequirementValue(rule?.max_age_bachelor), compare: (leadValue, reqValue) => reqValue === null || leadValue <= reqValue },
+    ]
+
+    rulesToEvaluate.forEach(({ label, leadValue, requirementValue, compare, key }) => {
+      if (requirementValue !== null && requirementValue !== undefined) {
+        totalCount += 1
+        if (compare(leadValue, requirementValue)) {
+          matchedCount += 1
+        } else {
+          missingRequirements.push(`${label} requirement not met: ${leadValue} ${key === 'max_age_bachelor' ? '>' : '<'} ${requirementValue}`)
+        }
+      }
+    })
+
+    const subjectRuleMap = [
+      { key: 'm_t', label: 'Math score', leadValue: leadSubjects.m_t },
+      { key: 'phy', label: 'Physics score', leadValue: leadSubjects.phy },
+      { key: 'se', label: 'Science score', leadValue: leadSubjects.se },
+      { key: 'lng', label: 'Languages score', leadValue: leadSubjects.lng },
+      { key: 'eco', label: 'Economics score', leadValue: leadSubjects.eco },
+      { key: 'geo_his', label: 'Geo-History score', leadValue: leadSubjects.geo_his },
+    ]
+
+    subjectRuleMap.forEach(({ key, label, leadValue }) => {
+      const requirementValue = parseRequirementValue(rule?.[key])
+      if (requirementValue !== null && requirementValue !== undefined) {
+        totalCount += 1
+        if (leadValue !== null && leadValue !== undefined && leadValue !== '' && leadValue >= requirementValue) {
+          matchedCount += 1
+        } else {
+          const actualValue = leadValue === null || leadValue === undefined || leadValue === '' ? 'Not provided' : leadValue
+          missingRequirements.push(`${label} too low: ${actualValue} < ${requirementValue}`)
+        }
+      }
+    })
+
+    const isMatch = missingRequirements.length === 0 && totalCount > 0
+    const matchPercentage = totalCount === 0 ? 0 : Math.round((matchedCount / totalCount) * 100)
+
+    return {
+      university: rule?.university || rule?.name || 'Unknown university',
+      country: rule?.country || 'Unknown country',
+      isMatch,
+      matchPercentage,
+      missingRequirements,
+      totalRequirements: totalCount,
+      rule,
+    }
+  }).sort((a, b) => {
+    if (a.matchPercentage !== b.matchPercentage) {
+      return b.matchPercentage - a.matchPercentage
+    }
+    if (a.isMatch === b.isMatch) {
+      return a.university.localeCompare(b.university)
+    }
+    return a.isMatch ? -1 : 1
+  })
+}
+
 export function suggestBestUniversity(leadData, universityRules = [], chancesByCountry = {}) {
   if (!Array.isArray(universityRules) || universityRules.length === 0) {
     return null

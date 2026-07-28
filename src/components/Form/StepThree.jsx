@@ -166,6 +166,101 @@ function StepThree({ values, onChange, onDynamicChange, onBack, onNext, error, e
           </label>
         ) : null}
 
+        <div className="mt-4 rounded-2xl border border-sky-100 bg-white p-5">
+          <h4 className="text-md font-semibold text-slate-800">{t.academicSubjectScoresTitle}</h4>
+          <p className="mt-2 text-sm text-slate-600">Optional — fill these if you have specific subject grades out of 20.</p>
+          <div className="mt-4 grid gap-4 md:grid-cols-2">
+            <label className="block text-sm font-medium text-slate-700">
+              <span className="mb-2 block">{t.mathScoreLabel}</span>
+              <input
+                type="number"
+                min="0"
+                max="20"
+                step="0.1"
+                value={values.mathScore}
+                onChange={(event) => onChange('mathScore', event.target.value)}
+                className="w-full rounded-xl border bg-white px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-sky-500 border-sky-100"
+                placeholder="14.0"
+              />
+            </label>
+
+            <label className="block text-sm font-medium text-slate-700">
+              <span className="mb-2 block">{t.physicsScoreLabel}</span>
+              <input
+                type="number"
+                min="0"
+                max="20"
+                step="0.1"
+                value={values.physicsScore}
+                onChange={(event) => onChange('physicsScore', event.target.value)}
+                className="w-full rounded-xl border bg-white px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-sky-500 border-sky-100"
+                placeholder="14.0"
+              />
+            </label>
+          </div>
+
+          <div className="mt-4 grid gap-4 md:grid-cols-2">
+            <label className="block text-sm font-medium text-slate-700">
+              <span className="mb-2 block">{t.scienceScoreLabel}</span>
+              <input
+                type="number"
+                min="0"
+                max="20"
+                step="0.1"
+                value={values.scienceScore}
+                onChange={(event) => onChange('scienceScore', event.target.value)}
+                className="w-full rounded-xl border bg-white px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-sky-500 border-sky-100"
+                placeholder="14.0"
+              />
+            </label>
+
+            <label className="block text-sm font-medium text-slate-700">
+              <span className="mb-2 block">{t.languagesScoreLabel}</span>
+              <input
+                type="number"
+                min="0"
+                max="20"
+                step="0.1"
+                value={values.languagesScore}
+                onChange={(event) => onChange('languagesScore', event.target.value)}
+                className="w-full rounded-xl border bg-white px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-sky-500 border-sky-100"
+                placeholder="14.0"
+              />
+              <p className="mt-2 text-xs text-slate-500">{t.languagesScoreNote}</p>
+            </label>
+          </div>
+
+          <div className="mt-4 grid gap-4 md:grid-cols-2">
+            <label className="block text-sm font-medium text-slate-700">
+              <span className="mb-2 block">{t.economicsScoreLabel}</span>
+              <input
+                type="number"
+                min="0"
+                max="20"
+                step="0.1"
+                value={values.economicsScore}
+                onChange={(event) => onChange('economicsScore', event.target.value)}
+                className="w-full rounded-xl border bg-white px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-sky-500 border-sky-100"
+                placeholder="14.0"
+              />
+            </label>
+
+            <label className="block text-sm font-medium text-slate-700">
+              <span className="mb-2 block">{t.geoHistoryScoreLabel}</span>
+              <input
+                type="number"
+                min="0"
+                max="20"
+                step="0.1"
+                value={values.historyGeoScore}
+                onChange={(event) => onChange('historyGeoScore', event.target.value)}
+                className="w-full rounded-xl border bg-white px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-sky-500 border-sky-100"
+                placeholder="14.0"
+              />
+            </label>
+          </div>
+        </div>
+
         <div className="mt-4 grid gap-4 md:grid-cols-2">
           <label className="block text-sm font-medium text-slate-700">
             <span className="mb-2 block">{t.englishLabel}</span>
