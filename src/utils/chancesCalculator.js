@@ -103,6 +103,10 @@ function parseMinimumGpaTo20Scale(minimumGpaRaw) {
     const denominator = Number(ratioMatch[2])
 
     if (Number.isFinite(numerator) && Number.isFinite(denominator) && denominator > 0) {
+      // If the GPA value is already expressed as X/20, use the numerator directly.
+      if (denominator === 20) {
+        return Number(numerator.toFixed(2))
+      }
       return Number(((numerator / denominator) * 20).toFixed(2))
     }
   }
@@ -210,9 +214,17 @@ function isDegreeLevelSupported(rule, selectedTargetDegree) {
 
   const levels = [rule?.level_1, rule?.level_2]
     .map((item) => `${item || ''}`.trim().toLowerCase())
-    .filter(Boolean)
+    .filter((item) => item && item !== '-' && item !== 'null' && item !== 'undefined')
 
   if (levels.length === 0) return true
+
+  if (target.includes('bachelor') && levels.some((level) => level.includes('bachelor'))) {
+    return true
+  }
+
+  if (target.includes('master') && levels.some((level) => level.includes('master'))) {
+    return true
+  }
 
   return levels.some((level) => target.includes(level) || level.includes(target))
 }
