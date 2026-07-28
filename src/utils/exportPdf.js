@@ -332,6 +332,77 @@ function openPrintIframe(html) {
   })
 }
 
+function renderUniversityMatchRows(results, isArabic) {
+  if (!Array.isArray(results) || results.length === 0) {
+    return `<tbody><tr><td colspan="5">${escapeHtml(isArabic ? 'لا توجد نتائج للمطابقة.' : 'No university match results available.')}</td></tr></tbody>`
+  }
+
+  const rowsHtml = results.map((result) => `
+      <tr>
+        <td>${escapeHtml(result.university)}</td>
+        <td>${escapeHtml(result.country)}</td>
+        <td>${escapeHtml(String(result.matchPercentage))}%</td>
+        <td>${escapeHtml(result.isMatch ? (isArabic ? 'مؤهل' : 'Eligible') : (isArabic ? 'غير مؤهل' : 'Not Eligible'))}</td>
+        <td>${escapeHtml(result.missingRequirements.length > 0 ? result.missingRequirements.join(' • ') : (isArabic ? 'لا يوجد' : 'None'))}</td>
+      </tr>`).join('')
+
+  return `<tbody>${rowsHtml}</tbody>`
+}
+
+export async function exportUniversityMatchPdf(submission, matchResults, language = 'en') {
+  const isArabic = language === 'ar'
+  const dir = isArabic ? 'rtl' : 'ltr'
+  const textAlign = isArabic ? 'right' : 'left'
+  const fullName = `${submission.first_name || ''} ${submission.last_name || ''}`.trim() || submission.name || 'Client'
+  const date = new Date().toLocaleDateString('en-GB')
+  const html = `<!DOCTYPE html>
+<html lang="${language}" dir="${dir}">
+<head>
+  <meta charset="utf-8">
+  <title>${escapeHtml(isArabic ? 'تصدير مطابقة الجامعات' : 'University Match Export')}</title>
+  <style>
+    @media print { @page { margin: 0; } body { padding: 20mm; } }
+    body { font-family: Arial, sans-serif; color: #0f172a; direction: ${dir}; text-align: ${textAlign}; }
+    h1 { font-size: 20px; margin-bottom: 6px; }
+    h2 { font-size: 14px; margin-top: 18px; margin-bottom: 8px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    th, td { border: 1px solid #cbd5e1; padding: 8px; font-size: 11px; }
+    th { background: #f8fafc; }
+    .header { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; margin-bottom: 16px; }
+    .meta { margin-top: 8px; font-size: 11px; }
+    .note { margin-top: 10px; font-size: 10px; color: #475569; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div>
+      <h1>${escapeHtml(isArabic ? 'تقرير مطابقة الجامعات' : 'University Match Report')}</h1>
+      <div class="meta">
+        <div><strong>${escapeHtml(isArabic ? 'الاسم' : 'Name')}:</strong> ${escapeHtml(fullName)}</div>
+        <div><strong>${escapeHtml(isArabic ? 'التاريخ' : 'Date')}:</strong> ${escapeHtml(date)}</div>
+      </div>
+    </div>
+  </div>
+  <h2>${escapeHtml(isArabic ? 'نتائج المطابقة الكاملة' : 'Full University Match Results')}</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>${escapeHtml(isArabic ? 'اسم الجامعة' : 'University Name')}</th>
+        <th>${escapeHtml(isArabic ? 'الدولة' : 'Country')}</th>
+        <th>${escapeHtml(isArabic ? 'نسبة المطابقة' : 'Match %')}</th>
+        <th>${escapeHtml(isArabic ? 'الحالة' : 'Status')}</th>
+        <th>${escapeHtml(isArabic ? 'المتطلبات المفقودة' : 'Missing Requirements')}</th>
+      </tr>
+    </thead>
+    ${renderUniversityMatchRows(matchResults, isArabic)}
+  </table>
+  <p class="note">${escapeHtml(isArabic ? 'هذه الوثيقة تصدر بناء على نتائج المطابقة المتاحة حالياً ولا تغني عن مراجعة المستشار.' : 'This document is generated from the current match results and is not a substitute for consultant review.')}</p>
+</body>
+</html>`
+
+  return openPrintIframe(html)
+}
+
 export async function exportClientPdf(submission, language = 'en') {
   const isArabic = language === 'ar'
   const dir = isArabic ? 'rtl' : 'ltr'

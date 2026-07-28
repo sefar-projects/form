@@ -5,7 +5,7 @@ import { supabase } from '../../lib/supabase'
 import { translations } from '../../i18n/translations'
 import { calculateChances, compareWithAllUniversities, suggestBestUniversity } from '../../utils/chancesCalculator'
 import { normalizeLeadData } from '../../utils/normalizeLead'
-import { exportSubmissionPdf, exportClientPdf } from '../../utils/exportPdf'
+import { exportSubmissionPdf, exportClientPdf, exportUniversityMatchPdf } from '../../utils/exportPdf'
 
 function parseObjectValue(value) {
   if (!value) return {}
@@ -448,6 +448,15 @@ function DashboardPanel({ language = 'en', onBack, onLogout }) {
                       >
                         {matchingLeadId === row.id ? t.runningFullUniversityMatchButton : t.runFullUniversityMatchButton}
                       </button>
+                      {matchResults[row.id] && matchResults[row.id].length > 0 ? (
+                        <button
+                          type="button"
+                          onClick={() => exportUniversityMatchPdf(row, matchResults[row.id], language)}
+                          className="rounded-full border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-700"
+                        >
+                          {t.exportUniversityMatchPdfButton}
+                        </button>
+                      ) : null}
                       <button type="button" onClick={() => exportSubmissionPdf(row, language)} className="text-sm font-semibold text-sky-700">
                         {t.exportPdfButton}
                       </button>
