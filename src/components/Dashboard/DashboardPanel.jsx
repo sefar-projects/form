@@ -161,6 +161,7 @@ function DashboardPanel({ language = 'en', onBack, onLogout }) {
     setReevaluationProgress(`Processing 1/1: ${getLeadDisplayName(lead)}`)
 
     try {
+      const rules = universityRules.length > 0 ? universityRules : await fetchUniversityCriteria()
       const rawLeadData = buildLeadDataFromSubmission(lead)
       const normalizedLead = normalizeLeadData(rawLeadData)
       const { data, error: functionError } = await supabase.functions.invoke('evaluate-study-path', {
@@ -171,9 +172,26 @@ function DashboardPanel({ language = 'en', onBack, onLogout }) {
         throw functionError
       }
 
+      const scorePayload = calculateChances(normalizedLead, rules, data?.relevance_score)
+      const recommendation = suggestBestUniversity(normalizedLead, rules, scorePayload)
+      const countrySpecificData = parseObjectValue(lead.country_specific_data)
+      const updatedCountryData = {
+        ...countrySpecificData,
+        _meta: {
+          ...countrySpecificData._meta,
+          studyPath: {
+            ...countrySpecificData._meta?.studyPath,
+            ...data,
+          },
+          recommendation,
+        },
+      }
+
       const updatePayload = {
         study_path_score: data?.relevance_score ?? null,
         study_path_explanation: data?.reasoning ?? null,
+        agency_internal_score: scorePayload,
+        country_specific_data: updatedCountryData,
       }
 
       const { error: updateError } = await supabase.from('leads').update(updatePayload).eq('id', lead.id)
