@@ -295,11 +295,21 @@ function DashboardPanel({ language = 'en', onBack, onLogout }) {
             country_specific_data: updatedCountryData,
           }
 
-          const { error } = await supabase.from('leads').update(updatePayload).eq('id', lead.id)
+          const { data, error } = await supabase
+            .from('leads')
+            .update(updatePayload)
+            .eq('id', lead.id)
+            .select()
+
           if (error) {
-            throw error
+            throw new Error(`DB Update Error: ${error.message}`)
           }
 
+          if (!data || data.length === 0) {
+            throw new Error(`Silent DB Failure: 0 rows updated for lead ${lead.id}. Check your Supabase RLS policies for UPDATE operations!`)
+          }
+
+          console.log(`Successfully updated lead ${lead.id}`, data)
           updatedCount += 1
         } catch (err) {
           console.error(`Failed to recompute lead ${lead?.id}:`, err)
