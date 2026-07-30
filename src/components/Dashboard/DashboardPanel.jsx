@@ -232,82 +232,97 @@ function DashboardPanel({ language = 'en', onBack, onLogout }) {
       if (total === 0) {
         setMessage('No leads found to re-evaluate.')
         setReevaluationProgress('')
+        setIsReevaluating(false)
         return
       }
 
       let updatedCount = 0
+      let index = 0
 
-      for (let index = 0; index < total; index += 1) {
-        const lead = allLeads[index]
-        const leadName = getLeadDisplayName(lead)
-        setReevaluationProgress(`Processing ${index + 1}/${total}: ${leadName}`)
+      for (const lead of allLeads) {
+        index += 1
+        setReevaluationProgress(`Processing ${index}/${total}: ${getLeadDisplayName(lead)}`)
 
-        const existingCountryData = parseObjectValue(lead.country_specific_data)
-        const previousStudyPath = existingCountryData?._meta?.studyPath || {}
+        try {
+          const existingCountryData = parseObjectValue(lead.country_specific_data)
+          const previousStudyPath = existingCountryData?._meta?.studyPath || {}
 
-        const rawLeadData = {
-          gpa: lead.gpa,
-          english_level: lead.english_level,
-          selected_countries: parseSelectedCountries(lead.selected_countries),
-          degree_type: lead.degree_type,
-          budget_availability: lead.budget_availability,
-          date_of_birth: lead.date_of_birth,
-          last_degree_date: lead.last_degree_date,
-          studied_in_english_before: lead.studied_in_english_before,
-          country_specific_data: existingCountryData,
-          previousDegree: previousStudyPath.previousDegree || '',
-          targetDegree: previousStudyPath.targetDegree || '',
-        }
+          const rawLeadData = {
+            gpa: lead.gpa,
+            english_level: lead.english_level,
+            selected_countries: parseSelectedCountries(lead.selected_countries),
+            degree_type: lead.degree_type,
+            budget_availability: lead.budget_availability,
+            date_of_birth: lead.date_of_birth,
+            last_degree_date: lead.last_degree_date,
+            studied_in_english_before: lead.studied_in_english_before,
+            country_specific_data: existingCountryData,
+            previousDegree: previousStudyPath.previousDegree || '',
+            targetDegree: previousStudyPath.targetDegree || '',
+          }
 
-        const normalizedLead = normalizeLeadData(rawLeadData)
-        const aiResult = await evaluateStudyPath(normalizedLead)
+          const normalizedLead = normalizeLeadData(rawLeadData)
+          const aiResult = await evaluateStudyPath(normalizedLead)
 
-        const scorePayload = calculateChances(
-          normalizedLead,
-          universityRules,
-          aiResult.relevance_score,
-        )
+          const scorePayload = calculateChances(
+            normalizedLead,
+            universityRules,
+            aiResult.relevance_score,
+          )
 
-        const recommendation = suggestBestUniversity(
-          normalizedLead,
-          universityRules,
-          scorePayload,
-        )
+          const recommendation = suggestBestUniversity(
+            normalizedLead,
+            universityRules,
+            scorePayload,
+          )
 
-        const updatedCountryData = {
-          ...existingCountryData,
-          _meta: {
-            ...existingCountryData._meta,
-            studyPath: {
-              ...previousStudyPath,
-              ...aiResult,
+          const updatedCountryData = {
+            ...existingCountryData,
+            _meta: {
+              ...existingCountryData._meta,
+              studyPath: {
+                ...previousStudyPath,
+                ...aiResult,
+              },
+              recommendation,
             },
-            recommendation,
-          },
-        }
+          }
 
-        const updatePayload = {
-          study_path_score: aiResult.relevance_score ?? null,
-          study_path_explanation: aiResult.reasoning ?? null,
-          agency_internal_score: scorePayload,
-          country_specific_data: updatedCountryData,
-        }
+          const updatePayload = {
+            study_path_score: aiResult.relevance_score ?? null,
+            study_path_explanation: aiResult.reasoning ?? null,
+            agency_internal_score: scorePayload,
+            country_specific_data: updatedCountryData,
+          }
 
-        const { error: updateError } = await supabase.from('leads').update(updatePayload).eq('id', lead.id)
-        if (!updateError) {
+          const { error } = await supabase.from('leads').update(updatePayload).eq('id', lead.id)
+          if (error) {
+            throw error
+          }
+
           updatedCount += 1
-        } else {
-          console.error('Supabase update error for lead:', lead.id, updateError)
+        } catch (err) {
+          console.error(`Failed to recompute lead ${lead?.id}:`, err)
+          try {
+            alert(`Error updating lead ${lead?.first_name || lead?.id}: ${err.message || String(err)}`)
+          } catch (e) {}
         }
 
+        // Respect server load
+        // eslint-disable-next-line no-await-in-loop
         await delay(300)
       }
 
+      // Explicit refresh after processing all leads so UI reflects DB state
       await loadData()
       setMessage(`Recomputed ${updatedCount} of ${total} lead(s).`)
-      alert(`Recomputed ${updatedCount} of ${total} lead(s).`)
+      alert('Recomputation finished successfully!')
     } catch (error) {
+      console.error('Recompute error:', error)
       setMessage(error.message || 'Unable to re-evaluate old leads right now.')
+      try {
+        alert(error.message || 'Unable to re-evaluate old leads right now.')
+      } catch (e) {}
     } finally {
       setIsReevaluating(false)
       setReevaluationProgress('')
