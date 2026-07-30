@@ -467,6 +467,29 @@ export function compareWithAllUniversities(normalizedLead, universityRules = [])
       }
     })
 
+    // Program level check — use the applicant's target/desired level from country-specific answers
+    try {
+      const targetCountry = ((lead.selected_countries && lead.selected_countries[0]) || 'poland').toLowerCase()
+      const desiredLevelRaw = (lead.country_specific_data && lead.country_specific_data[targetCountry] && lead.country_specific_data[targetCountry].desiredLevel) || 'bachelor'
+      const targetLevel = `${desiredLevelRaw}`.toLowerCase()
+
+      const level1 = `${rule?.level_1 || ''}`.trim().toLowerCase()
+      const level2 = `${rule?.level_2 || ''}`.trim().toLowerCase()
+      const levelsPresent = [level1, level2].filter((l) => l && l !== '-' && l !== 'null' && l !== 'undefined')
+
+      if (levelsPresent.length > 0) {
+        const levelMatch = (level1 === targetLevel) || (level2 === targetLevel) || (level1.includes(targetLevel)) || (level2.includes(targetLevel))
+        totalCount += 1
+        if (levelMatch) {
+          matchedCount += 1
+        } else {
+          missingRequirements.push(`Target level (${targetLevel}) not offered by university.`)
+        }
+      }
+    } catch (e) {
+      // ignore and continue if structure is unexpected
+    }
+
     const isMatch = missingRequirements.length === 0 && totalCount > 0
     const matchPercentage = totalCount === 0 ? 0 : Math.round((matchedCount / totalCount) * 100)
 
@@ -528,7 +551,10 @@ export function suggestBestUniversity(leadData, universityRules = [], chancesByC
   candidateRules.forEach((rule) => {
     const countryKey = `${rule.country || ''}`.trim()
     const dynamicAnswers = countrySpecificData[countryKey] || {}
-    const selectedTargetDegree = dynamicAnswers.desiredLevel || normalizedLead.degree_type || normalizedLead.degreeType || ''
+    // Extract target/desired level from country-specific responses (default to 'bachelor')
+    const targetCountry = ((originalSelectedCountries[0]) || 'poland').toLowerCase()
+    const desiredLevelRaw = (countrySpecificData[targetCountry] && countrySpecificData[targetCountry].desiredLevel) || 'bachelor'
+    const targetLevel = `${desiredLevelRaw}`.toLowerCase()
     const chancePercentage = Number(chancesByCountry?.[countryKey]?.percentage ?? 0)
 
     const minimumGpa = parseMinimumGpaTo20Scale(rule?.minimum_gpa)
@@ -566,7 +592,7 @@ export function suggestBestUniversity(leadData, universityRules = [], chancesByC
       reasons.push(`Academic gap is above limit (${derivedGapYears} > ${maxGapYears}).`)
     }
 
-    const maxAge = `${selectedTargetDegree}`.toLowerCase().includes('master') ? maxAgeMaster : maxAgeBachelor
+    const maxAge = `${targetLevel}`.toLowerCase().includes('master') ? maxAgeMaster : maxAgeBachelor
     if (ageFromDob <= maxAge) {
       score += 8
       reasons.push(`Age profile fits typical limit (${ageFromDob} <= ${maxAge}).`)
@@ -589,12 +615,28 @@ export function suggestBestUniversity(leadData, universityRules = [], chancesByC
       }
     }
 
-    if (isDegreeLevelSupported(rule, selectedTargetDegree)) {
-      score += 5
-      reasons.push(`Program level appears supported (${selectedTargetDegree || 'selected degree'}).`)
-    } else {
-      score -= 12
-      reasons.push(`Program level may not match available levels (${rule.level_1 || '-'} / ${rule.level_2 || '-' }).`)
+    // Program level check: compare applicant's target level against university offerings
+    try {
+      const level1 = `${rule?.level_1 || ''}`.trim().toLowerCase()
+      const level2 = `${rule?.level_2 || ''}`.trim().toLowerCase()
+      const levelsPresent = [level1, level2].filter((l) => l && l !== '-' && l !== 'null' && l !== 'undefined')
+
+      const levelMatch = (level1 === targetLevel) || (level2 === targetLevel) || (level1.includes(targetLevel)) || (level2.includes(targetLevel))
+
+      if (levelsPresent.length === 0) {
+        // No explicit restrictions — treat as supported
+        score += 5
+        reasons.push('Program level appears supported (no specified restrictions).')
+      } else if (levelMatch) {
+        score += 5
+        reasons.push(`Program level fits target (${targetLevel}).`)
+      } else {
+        // Do not apply the old harsh penalty; report reason only
+        reasons.push(`Target level (${targetLevel}) not offered by university.`)
+      }
+    } catch (e) {
+      // If any unexpected structure, don't penalize
+      reasons.push('Program level check skipped due to unexpected data structure.')
     }
 
     // Reuse calculated country chance to bias recommendation toward stronger overall outcomes.
