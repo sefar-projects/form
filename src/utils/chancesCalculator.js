@@ -250,7 +250,10 @@ export function calculateChances(leadData, universityRules = [], aiStudyPathScor
   return selectedCountries.reduce((accumulator, countryName) => {
     const dynamicAnswers = countrySpecificData[countryName] || {}
     const preferredUniversity = dynamicAnswers.preferredUniversity || ''
-    const selectedTargetDegree = dynamicAnswers.desiredLevel || normalizedLead.degree_type || normalizedLead.degreeType || ''
+    // Determine applicant's target/desired degree level from country-specific answers (fallbacks applied)
+    const targetCountry = ((normalizedLead.selected_countries && normalizedLead.selected_countries[0]) || 'poland').toLowerCase()
+    const desiredLevelRaw = (normalizedLead.country_specific_data && normalizedLead.country_specific_data[targetCountry] && normalizedLead.country_specific_data[targetCountry].desiredLevel) || dynamicAnswers.desiredLevel || normalizedLead.degree_type || normalizedLead.degreeType || 'bachelor'
+    const targetLevel = `${desiredLevelRaw}`.toLowerCase()
     const rule = pickRuleForCountry(universityRules, countryName, preferredUniversity)
 
     const minimumGpa = parseMinimumGpaTo20Scale(rule?.minimum_gpa)
@@ -304,8 +307,8 @@ export function calculateChances(leadData, universityRules = [], aiStudyPathScor
       weakPoints.push(`Academic gap exceeds the allowed threshold (${derivedGapYears} years vs max ${maxGapYears}).`)
     }
 
-    const lowerTarget = `${selectedTargetDegree}`.toLowerCase()
-    const maxAge = lowerTarget.includes('master') ? maxAgeMaster : maxAgeBachelor
+    // Use applicant's target level to determine age caps
+    const maxAge = `${targetLevel}`.toLowerCase().includes('master') ? maxAgeMaster : maxAgeBachelor
     if (rule && ageFromDob > maxAge) {
       penalties += 15
       failedCriticalRequirement = true
