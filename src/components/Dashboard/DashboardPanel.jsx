@@ -148,6 +148,21 @@ function DashboardPanel({ language = 'en', onBack, onLogout }) {
     return countrySpecificData?._meta?.recommendation || null
   }
 
+  const getRecommendedMajorForRow = (row, result = null) => {
+    const countrySpecificData = parseObjectValue(row.country_specific_data)
+    const candidate = [
+      row?.ai_recommended_major,
+      row?.recommended_major_en,
+      countrySpecificData?.ai_recommended_major,
+      countrySpecificData?.recommended_major_en,
+      countrySpecificData?._meta?.studyPath?.recommended_major_en,
+      result?.programName,
+      result?.university,
+    ].find((value) => value && `${value}`.trim())
+
+    return candidate ? `${candidate}`.trim() : 'General'
+  }
+
   const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
   const handleReevaluateSingleLead = async (lead) => {
@@ -549,6 +564,7 @@ function DashboardPanel({ language = 'en', onBack, onLogout }) {
                               <thead>
                                 <tr>
                                   <th className="border-b border-slate-200 px-3 py-2 font-semibold text-slate-600">{t.universityNameColumn}</th>
+                                  <th className="border-b border-slate-200 px-3 py-2 font-semibold text-slate-600">{t.recommendedMajorColumn}</th>
                                   <th className="border-b border-slate-200 px-3 py-2 font-semibold text-slate-600">{t.countryColumn}</th>
                                   <th className="border-b border-slate-200 px-3 py-2 font-semibold text-slate-600">{t.matchPercentageColumn}</th>
                                   <th className="border-b border-slate-200 px-3 py-2 font-semibold text-slate-600">{t.statusColumn}</th>
@@ -559,6 +575,7 @@ function DashboardPanel({ language = 'en', onBack, onLogout }) {
                                 {matchResults[row.id].map((result) => (
                                   <tr key={`${result.university}-${result.country}`} className="border-b border-slate-200 bg-white last:border-0">
                                     <td className="px-3 py-3 text-slate-700">{result.university}</td>
+                                    <td className="px-3 py-3 text-slate-700">{getRecommendedMajorForRow(row, result)}</td>
                                     <td className="px-3 py-3 text-slate-700">{result.country}</td>
                                     <td className="px-3 py-3 font-semibold text-slate-800">{result.matchPercentage}%</td>
                                     <td className="px-3 py-3">

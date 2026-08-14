@@ -391,7 +391,7 @@ export function calculateChances(leadData, universityRules = [], aiStudyPathScor
   }, {})
 }
 
-export function compareWithAllUniversities(normalizedLead, universityRules = []) {
+export function compareWithAllUniversities(normalizedLead, universityRules = [], aiRecommendedMajor = '') {
   const lead = normalizeLeadData(normalizedLead || {})
   const leadAge = Number(lead.calculated_age || 0)
   const leadGpa = Number(lead.normalized_gpa_on_20 || 0)
@@ -425,10 +425,51 @@ export function compareWithAllUniversities(normalizedLead, universityRules = [])
     geo_his: parseScoreValue(subjectScoresRaw.geo_his),
   }
 
+  const normalizeMajorText = (value) => `${value || ''}`
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+
+  const extractMajorKeywords = (value) => {
+    const normalized = normalizeMajorText(value)
+    return normalized ? normalized.split(' ').filter((word) => word.length > 2) : []
+  }
+
+  const inferAiRecommendedMajor = () => {
+    const candidates = [
+      aiRecommendedMajor,
+      lead.ai_recommended_major,
+      lead.recommended_major_en,
+      lead.study_path_explanation,
+      lead.country_specific_data?.study_path_explanation,
+      lead.country_specific_data?.ai_recommended_major,
+      lead.country_specific_data?.recommended_major_en,
+      lead.country_specific_data?._meta?.academic?.recommended_major,
+      lead.country_specific_data?.recommended_major,
+    ]
+
+    return candidates.find((item) => item && `${item}`.trim()) || ''
+  }
+
+  const studentSpecialization = [
+    lead.specialization1,
+    lead.specialization_1,
+    lead.country_specific_data?.specialization1,
+    lead.country_specific_data?._meta?.academic?.specialization1,
+    lead.study_field,
+  ].find((item) => item && `${item}`.trim()) || ''
+
+  const aiMajorText = inferAiRecommendedMajor()
+
   return (Array.isArray(universityRules) ? universityRules : []).map((rule) => {
     const missingRequirements = []
     let matchedCount = 0
     let totalCount = 0
+
+    const majorMatch = rule?.university?.match(/\/+(.+?)\/+/) || rule?.name?.match(/\/+(.+?)\/+/) || null
+    const extractedMajor = majorMatch ? majorMatch[1].trim() : 'General'
+    const cleanUniversityName = `${rule?.university || rule?.name || 'Unknown university'}`.replace(/\/+.*?\/+/, '').trim()
 
     const rulesToEvaluate = [
       { key: 'minimum_gpa', label: 'GPA', leadValue: leadGpa, requirementValue: parseMinimumGpaTo20Scale(rule?.minimum_gpa), compare: (leadValue, reqValue) => leadValue >= reqValue },
@@ -493,13 +534,33 @@ export function compareWithAllUniversities(normalizedLead, universityRules = [])
       // ignore and continue if structure is unexpected
     }
 
+    const majorKeywords = [...new Set([
+      ...extractMajorKeywords(studentSpecialization),
+      ...extractMajorKeywords(aiMajorText),
+      ...extractMajorKeywords(extractedMajor),
+    ])]
+
+    const normalizedExtractedMajor = normalizeMajorText(extractedMajor)
+    const isMajorMatch = majorKeywords.length > 0 && majorKeywords.some((keyword) => {
+      if (!keyword || !normalizedExtractedMajor) return false
+      return normalizedExtractedMajor.includes(keyword)
+    })
+
     const isMatch = missingRequirements.length === 0 && totalCount > 0
-    const matchPercentage = totalCount === 0 ? 0 : Math.round((matchedCount / totalCount) * 100)
+    let matchPercentage = totalCount === 0 ? 0 : Math.round((matchedCount / totalCount) * 100)
+
+    if (isMajorMatch) {
+      matchPercentage = Math.min(100, Math.round(matchPercentage * 1.2))
+      missingRequirements.push(`✨ Strong Academic Fit for ${extractedMajor}`)
+    }
 
     return {
-      university: rule?.university || rule?.name || 'Unknown university',
+      university: cleanUniversityName || rule?.university || rule?.name || 'Unknown university',
+      cleanUniversityName,
+      programName: extractedMajor,
       country: rule?.country || 'Unknown country',
       isMatch,
+      isMajorMatch,
       matchPercentage,
       missingRequirements,
       totalRequirements: totalCount,
