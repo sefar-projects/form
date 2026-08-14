@@ -34,12 +34,14 @@ export async function evaluateStudyPath(normalizedLeadInput = {}) {
     return {
       relevance_score: Number(data?.relevance_score ?? 0),
       reasoning: data?.reasoning || '',
+      recommended_major_en: data?.recommended_major_en || null,
     }
   } catch (error) {
     console.error("Edge Function AI Error (Safe Fallback Used):", error)
     return {
       relevance_score: 5,
-      reasoning: "AI evaluation unavailable at the time of submission. Manual review required."
+      reasoning: "AI evaluation unavailable at the time of submission. Manual review required.",
+      recommended_major_en: null,
     }
   }
 }

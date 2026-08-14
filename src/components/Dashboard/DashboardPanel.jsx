@@ -42,6 +42,8 @@ function buildLeadDataFromSubmission(row) {
     date_of_birth: row.date_of_birth,
     last_degree_date: row.last_degree_date || academicMeta.lastDegreeDate,
     studied_in_english_before: row.studied_in_english_before ?? academicMeta.studiedInEnglishBefore,
+    ai_recommended_major: row.ai_recommended_major || row.recommended_major_en || null,
+    specialization1: academicMeta.specialization1 || countrySpecificData?.poland?.specialization1 || row.specialization1 || '',
     subject_scores: {
       m_t: subjectScores.m_t,
       phy: subjectScores.phy,
@@ -163,6 +165,17 @@ function DashboardPanel({ language = 'en', onBack, onLogout }) {
     return candidate ? `${candidate}`.trim() : 'General'
   }
 
+  const renderRecommendedMajorBadge = (row) => {
+    const recommendedMajor = getRecommendedMajorForRow(row)
+    if (!recommendedMajor || recommendedMajor === 'General') return null
+
+    return (
+      <div className="mt-2 inline-flex rounded-full border border-violet-200 bg-violet-50 px-2.5 py-1 text-[11px] font-semibold text-violet-700">
+        AI Recommended Major: {recommendedMajor}
+      </div>
+    )
+  }
+
   const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
   const handleReevaluateSingleLead = async (lead) => {
@@ -205,6 +218,7 @@ function DashboardPanel({ language = 'en', onBack, onLogout }) {
       const updatePayload = {
         study_path_score: data?.relevance_score ?? null,
         study_path_explanation: data?.reasoning ?? null,
+        ai_recommended_major: data?.recommended_major_en ?? countrySpecificData?._meta?.studyPath?.recommended_major_en ?? null,
         agency_internal_score: scorePayload,
         country_specific_data: updatedCountryData,
       }
@@ -306,6 +320,7 @@ function DashboardPanel({ language = 'en', onBack, onLogout }) {
           const updatePayload = {
             study_path_score: aiResult.relevance_score ?? null,
             study_path_explanation: aiResult.reasoning ?? null,
+            ai_recommended_major: aiResult.recommended_major_en ?? previousStudyPath.recommended_major_en ?? null,
             agency_internal_score: scorePayload,
             country_specific_data: updatedCountryData,
           }
@@ -484,6 +499,7 @@ function DashboardPanel({ language = 'en', onBack, onLogout }) {
                           {row.study_path_score ?? 'N/A'}
                         </span>
                       </div>
+                      {renderRecommendedMajorBadge(row)}
                       {getRecommendationForRow(row) ? (
                         <p className="mt-2 text-xs text-slate-600">
                           Suggested: {getRecommendationForRow(row).country} - {getRecommendationForRow(row).university}

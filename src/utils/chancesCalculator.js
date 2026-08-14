@@ -534,21 +534,30 @@ export function compareWithAllUniversities(normalizedLead, universityRules = [],
       // ignore and continue if structure is unexpected
     }
 
-    const majorKeywords = [...new Set([
-      ...extractMajorKeywords(studentSpecialization),
-      ...extractMajorKeywords(aiMajorText),
-      ...extractMajorKeywords(extractedMajor),
-    ])]
+    // 1. Set default to false
+    let isMajorMatch = false
 
-    const normalizedExtractedMajor = normalizeMajorText(extractedMajor)
-    const isMajorMatch = majorKeywords.length > 0 && majorKeywords.some((keyword) => {
-      if (!keyword || !normalizedExtractedMajor) return false
-      return normalizedExtractedMajor.includes(keyword)
-    })
+    // 2. Clean the strings for safe comparison
+    const safeExtractedMajor = extractedMajor.toLowerCase().trim()
+    const safeAiMajor = (aiRecommendedMajor || '').toLowerCase().trim()
+    const safeUserSpecialization = (normalizedLead.specialization1 || '').toLowerCase().trim()
+
+    // 3. ONLY evaluate if the university actually has a specific major (not "general" or empty)
+    if (safeExtractedMajor && safeExtractedMajor !== 'general') {
+      // 4. Check if the extracted major contains the user's specific choice
+      if (safeUserSpecialization && safeExtractedMajor.includes(safeUserSpecialization)) {
+        isMajorMatch = true
+      }
+      // 5. Otherwise, check if it matches the AI's recommendation
+      else if (safeAiMajor && safeExtractedMajor.includes(safeAiMajor)) {
+        isMajorMatch = true
+      }
+    }
 
     const isMatch = missingRequirements.length === 0 && totalCount > 0
     let matchPercentage = totalCount === 0 ? 0 : Math.round((matchedCount / totalCount) * 100)
 
+    // 6. Apply the boost ONLY if it's a true match
     if (isMajorMatch) {
       matchPercentage = Math.min(100, Math.round(matchPercentage * 1.2))
       missingRequirements.push(`✨ Strong Academic Fit for ${extractedMajor}`)
