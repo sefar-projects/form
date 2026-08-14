@@ -630,6 +630,11 @@ export function suggestBestUniversity(leadData, universityRules = [], chancesByC
     const targetLevel = `${desiredLevelRaw}`.toLowerCase()
     const chancePercentage = Number(chancesByCountry?.[countryKey]?.percentage ?? 0)
 
+    const universityNameRaw = `${rule?.university || rule?.name || 'Unknown university'}`
+    const majorMatch = universityNameRaw.match(/\/+(.+?)\/+/) || null
+    const programName = majorMatch ? majorMatch[1].trim() : 'General'
+    const cleanUniversityName = universityNameRaw.replace(/\/+.*?\/+/, '').trim() || universityNameRaw
+
     const minimumGpa = parseMinimumGpaTo20Scale(rule?.minimum_gpa)
     const minimumFee = Number(rule?.minimum_fee ?? 0)
     const maxGapYears = Number(rule?.max_gap_years ?? 99)
@@ -725,7 +730,9 @@ export function suggestBestUniversity(leadData, universityRules = [], chancesByC
 
     const option = {
       country: rule.country,
-      university: rule.university,
+      university: cleanUniversityName,
+      cleanUniversityName,
+      programName,
       recommendation_score: boundedScore10,
       recommendation_score_100: Math.round(boundedScore10 * 10),
       reasons,

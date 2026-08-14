@@ -334,17 +334,27 @@ function openPrintIframe(html) {
 
 function renderUniversityMatchRows(results, isArabic) {
   if (!Array.isArray(results) || results.length === 0) {
-    return `<tbody><tr><td colspan="5">${escapeHtml(isArabic ? 'لا توجد نتائج للمطابقة.' : 'No university match results available.')}</td></tr></tbody>`
+    return `<tbody><tr><td colspan="6">${escapeHtml(isArabic ? 'لا توجد نتائج للمطابقة.' : 'No university match results available.')}</td></tr></tbody>`
   }
 
-  const rowsHtml = results.map((result) => `
+  const rowsHtml = results.map((result) => {
+    const universityName = result.cleanUniversityName || result.university || 'Unknown university'
+    const programName = result.programName || result.program || 'General'
+    const matchLabel = result.isMatch ? (isArabic ? 'مؤهل' : 'Eligible') : (isArabic ? 'غير مؤهل' : 'Not Eligible')
+    const missingText = result.missingRequirements && result.missingRequirements.length > 0
+      ? result.missingRequirements.join(' • ')
+      : (isArabic ? 'لا يوجد' : 'None')
+
+    return `
       <tr>
-        <td>${escapeHtml(result.university)}</td>
+        <td>${escapeHtml(universityName)}</td>
+        <td>${escapeHtml(programName)}</td>
         <td>${escapeHtml(result.country)}</td>
         <td>${escapeHtml(String(result.matchPercentage))}%</td>
-        <td>${escapeHtml(result.isMatch ? (isArabic ? 'مؤهل' : 'Eligible') : (isArabic ? 'غير مؤهل' : 'Not Eligible'))}</td>
-        <td>${escapeHtml(result.missingRequirements.length > 0 ? result.missingRequirements.join(' • ') : (isArabic ? 'لا يوجد' : 'None'))}</td>
-      </tr>`).join('')
+        <td>${escapeHtml(matchLabel)}</td>
+        <td>${escapeHtml(missingText)}</td>
+      </tr>`
+  }).join('')
 
   return `<tbody>${rowsHtml}</tbody>`
 }
@@ -388,6 +398,7 @@ export async function exportUniversityMatchPdf(submission, matchResults, languag
     <thead>
       <tr>
         <th>${escapeHtml(isArabic ? 'اسم الجامعة' : 'University Name')}</th>
+        <th>${escapeHtml(isArabic ? 'اسم البرنامج' : 'Program Name')}</th>
         <th>${escapeHtml(isArabic ? 'الدولة' : 'Country')}</th>
         <th>${escapeHtml(isArabic ? 'نسبة المطابقة' : 'Match %')}</th>
         <th>${escapeHtml(isArabic ? 'الحالة' : 'Status')}</th>
