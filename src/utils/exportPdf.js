@@ -359,6 +359,27 @@ function renderUniversityMatchRows(results, isArabic) {
   return `<tbody>${rowsHtml}</tbody>`
 }
 
+function buildAiRecommendationSection(submission, isArabic) {
+  const countrySpecificData = parseObjectValue(submission.country_specific_data)
+  const aiFields = countrySpecificData?._meta?.studyPath || {}
+  const bestUniversity = aiFields.best_university_en || countrySpecificData?.best_university_en || 'N/A'
+  const bestProgram = aiFields.best_program_en || countrySpecificData?.best_program_en || 'N/A'
+  const whyFit = aiFields.why_best_university_en || countrySpecificData?.why_best_university_en || 'No rationale provided.'
+
+  if (!bestUniversity && !bestProgram && !whyFit) {
+    return ''
+  }
+
+  return `
+    <div style="margin-top: 18px; border: 1px solid #e9d5ff; background: #faf5ff; border-radius: 10px; padding: 12px;">
+      <h2 style="margin: 0 0 8px; font-size: 14px; color: #6d28d9;">${escapeHtml(isArabic ? 'توصية الذكاء الاصطناعي' : 'AI Recommendation')}</h2>
+      <p style="margin: 6px 0; font-size: 11px;"><strong>${escapeHtml(isArabic ? 'الجامعة' : 'University')}:</strong> ${escapeHtml(bestUniversity)}</p>
+      <p style="margin: 6px 0; font-size: 11px;"><strong>${escapeHtml(isArabic ? 'البرنامج' : 'Program')}:</strong> ${escapeHtml(bestProgram)}</p>
+      <p style="margin: 6px 0; font-size: 11px;"><strong>${escapeHtml(isArabic ? 'سبب التوصية' : 'Why this fit')}:</strong> ${escapeHtml(whyFit)}</p>
+    </div>
+  `
+}
+
 export async function exportUniversityMatchPdf(submission, matchResults, language = 'en') {
   const isArabic = language === 'ar'
   const dir = isArabic ? 'rtl' : 'ltr'
@@ -394,6 +415,7 @@ export async function exportUniversityMatchPdf(submission, matchResults, languag
     </div>
   </div>
   <h2>${escapeHtml(isArabic ? 'نتائج المطابقة الكاملة' : 'Full University Match Results')}</h2>
+  ${buildAiRecommendationSection(submission, isArabic)}
   <table>
     <thead>
       <tr>

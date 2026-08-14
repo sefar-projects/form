@@ -150,6 +150,26 @@ function DashboardPanel({ language = 'en', onBack, onLogout }) {
     return countrySpecificData?._meta?.recommendation || null
   }
 
+  const getRecommendationDisplayText = (row) => {
+    const recommendation = getRecommendationForRow(row)
+    if (!recommendation) return '—'
+
+    const universityName = recommendation.cleanUniversityName || recommendation.university || 'Unknown university'
+    const programName = recommendation.programName || recommendation.program || ''
+
+    return programName ? `${universityName} / ${programName}` : universityName
+  }
+
+  const getAiRecommendationForRow = (row) => {
+    const countrySpecificData = parseObjectValue(row.country_specific_data)
+    return {
+      best_university_en: countrySpecificData?._meta?.studyPath?.best_university_en || countrySpecificData?.best_university_en || null,
+      best_program_en: countrySpecificData?._meta?.studyPath?.best_program_en || countrySpecificData?.best_program_en || null,
+      why_best_university_en: countrySpecificData?._meta?.studyPath?.why_best_university_en || countrySpecificData?.why_best_university_en || null,
+      general_info_en: countrySpecificData?._meta?.studyPath?.general_info_en || countrySpecificData?.general_info_en || null,
+    }
+  }
+
   const getRecommendedMajorForRow = (row, result = null) => {
     const countrySpecificData = parseObjectValue(row.country_specific_data)
     const candidate = [
@@ -502,7 +522,7 @@ function DashboardPanel({ language = 'en', onBack, onLogout }) {
                       {renderRecommendedMajorBadge(row)}
                       {getRecommendationForRow(row) ? (
                         <p className="mt-2 text-xs text-slate-600">
-                          Suggested: {getRecommendationForRow(row).country} - {getRecommendationForRow(row).university}
+                          Suggested: {getRecommendationForRow(row).country} - {getRecommendationDisplayText(row)}
                           {getRecommendationScoreOutOf10(getRecommendationForRow(row)) !== null
                             ? ` (${getRecommendationScoreOutOf10(getRecommendationForRow(row))}/10)`
                             : ''}
@@ -558,11 +578,27 @@ function DashboardPanel({ language = 'en', onBack, onLogout }) {
                     <div className="mt-3 rounded-xl border border-sky-100 bg-white p-3">
                       <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">AI Study Path Evaluation</p>
                       <p className="mt-2 text-sm text-slate-700">{row.study_path_explanation || 'No AI explanation available.'}</p>
+
+                      {(() => {
+                        const aiRecommendation = getAiRecommendationForRow(row)
+                        const hasAiRecommendation = aiRecommendation.best_university_en || aiRecommendation.best_program_en || aiRecommendation.why_best_university_en
+                        if (!hasAiRecommendation) return null
+
+                        return (
+                          <div className="mt-4 rounded-xl border border-violet-200 bg-violet-50 p-3">
+                            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-violet-700">AI Recommendation</p>
+                            <p className="mt-2 text-sm text-slate-800"><span className="font-semibold">University:</span> {aiRecommendation.best_university_en || 'N/A'}</p>
+                            <p className="mt-1 text-sm text-slate-800"><span className="font-semibold">Program:</span> {aiRecommendation.best_program_en || 'N/A'}</p>
+                            <p className="mt-2 text-xs text-slate-700"><span className="font-semibold">Why this fit:</span> {aiRecommendation.why_best_university_en || 'No rationale provided.'}</p>
+                          </div>
+                        )
+                      })()}
+
                       {getRecommendationForRow(row) ? (
                         <>
                           <p className="mt-3 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Suggested Best Option</p>
                           <p className="mt-2 text-sm text-slate-700">
-                            {getRecommendationForRow(row).country} - {getRecommendationForRow(row).university}
+                            {getRecommendationForRow(row).country} - {getRecommendationDisplayText(row)}
                             {' '}
                             ({getRecommendationScoreOutOf10(getRecommendationForRow(row)) ?? 'N/A'}/10)
                           </p>
