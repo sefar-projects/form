@@ -7,6 +7,53 @@ serve(async (req: Request) => {
 
   try {
     const rawData = await req.json()
+    // @ts-ignore
+    const apiKey = Deno.env.get('GROQ_API_KEY') || Deno.env.get('GEMINI_API_KEY')
+    const targetMatch = rawData?.target_match && typeof rawData.target_match === 'object' ? rawData.target_match : null
+
+    if (targetMatch) {
+      const targetUniversity = targetMatch.university || 'the suggested university'
+      const targetProgram = targetMatch.program || 'the recommended program'
+      const targetTuition = targetMatch.tuition || rawData?.tuition_budget_range || 'the available tuition budget'
+
+      const systemPrompt = `You are an expert academic admissions advisor. The system has calculated that the best university for this applicant is ${targetUniversity} for the ${targetProgram} program. Write a persuasive, professional 3-sentence rationale explaining why this is a strong academic and financial fit. You MUST reference their specific high school grades/degree and their tuition budget in your explanation.`
+
+      const userPrompt = `Applicant profile:\n- Current qualification: ${rawData.normalized_degree || rawData.degree_type || 'High School'}\n- GPA: ${rawData.gpa || 'N/A'}\n- Tuition budget: ${targetTuition}\n- Subject strengths: ${rawData.subject_scores ? JSON.stringify(rawData.subject_scores) : 'Not provided'}\n- Selected countries: ${Array.isArray(rawData.selected_countries) ? rawData.selected_countries.join(', ') : 'Not provided'}`
+
+      if (!apiKey) {
+        throw new Error('Missing Groq/Gemini API key for targeted rationale generation.')
+      }
+
+      const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          model: 'llama-3.3-70b-versatile',
+          temperature: 0.2,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userPrompt }
+          ],
+          response_format: { type: 'json_object' }
+        })
+      })
+
+      const data = await response.json()
+      if (data.error) throw new Error(`Groq Error: ${data.error.message}`)
+
+      const rawText = data.choices[0].message.content
+      const aiOutput = JSON.parse(rawText.replace(/```json/g, '').replace(/```/g, '').trim())
+
+      return new Response(JSON.stringify({
+        rationale_en: aiOutput.rationale_en || aiOutput.reasoning_en || 'Not provided',
+        rationale_ar: aiOutput.rationale_ar || aiOutput.reasoning_ar || 'لم يتم توفير شرح باللغة العربية.'
+      }), {
+        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+      })
+    }
 
     const subjectScores = typeof rawData.subject_scores === 'object' && rawData.subject_scores
       ? rawData.subject_scores

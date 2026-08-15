@@ -325,6 +325,31 @@ function DashboardPanel({ language = 'en', onBack, onLogout }) {
             scorePayload,
           )
 
+          let rationaleEn = null
+          let rationaleAr = null
+
+          if (recommendation) {
+            const targetMatch = {
+              university: recommendation.cleanUniversityName || recommendation.university || recommendation.original_university_string || 'Unknown university',
+              program: recommendation.programName || recommendation.program || 'General',
+              tuition: recommendation.tuition_fees ?? recommendation.minimum_fee ?? normalizedLead.normalized_budget_amount ?? normalizedLead.budget_availability ?? lead.budget_availability ?? null,
+            }
+
+            const { data: secondPassData, error: secondPassError } = await supabase.functions.invoke('evaluate-study-path', {
+              body: {
+                ...normalizedLead,
+                target_match: targetMatch,
+              },
+            })
+
+            if (secondPassError) {
+              console.error('Second-pass rationale failed:', secondPassError)
+            } else {
+              rationaleEn = secondPassData?.rationale_en || secondPassData?.reasoning_en || null
+              rationaleAr = secondPassData?.rationale_ar || secondPassData?.reasoning_ar || null
+            }
+          }
+
           const updatedCountryData = {
             ...existingCountryData,
             _meta: {
@@ -332,15 +357,23 @@ function DashboardPanel({ language = 'en', onBack, onLogout }) {
               studyPath: {
                 ...previousStudyPath,
                 ...aiResult,
+                ...(rationaleEn ? { ai_match_rationale_en: rationaleEn } : {}),
+                ...(rationaleAr ? { ai_match_rationale_ar: rationaleAr } : {}),
               },
               recommendation,
+              ai_match_rationale_en: rationaleEn || existingCountryData?._meta?.ai_match_rationale_en || null,
+              ai_match_rationale_ar: rationaleAr || existingCountryData?._meta?.ai_match_rationale_ar || null,
             },
+            ai_match_rationale_en: rationaleEn || existingCountryData?.ai_match_rationale_en || null,
+            ai_match_rationale_ar: rationaleAr || existingCountryData?.ai_match_rationale_ar || null,
           }
 
           const updatePayload = {
             study_path_score: aiResult.relevance_score ?? null,
             study_path_explanation: aiResult.reasoning ?? null,
             ai_recommended_major: aiResult.recommended_major_en ?? previousStudyPath.recommended_major_en ?? null,
+            ai_match_rationale_en: rationaleEn || null,
+            ai_match_rationale_ar: rationaleAr || null,
             agency_internal_score: scorePayload,
             country_specific_data: updatedCountryData,
           }

@@ -359,14 +359,33 @@ function renderUniversityMatchRows(results, isArabic) {
   return `<tbody>${rowsHtml}</tbody>`
 }
 
-function buildAiRecommendationSection(submission, isArabic) {
+function buildAiRecommendationSection(submission, matchResults, isArabic) {
   const countrySpecificData = parseObjectValue(submission.country_specific_data)
   const aiFields = countrySpecificData?._meta?.studyPath || {}
-  const bestUniversity = aiFields.best_university_en || countrySpecificData?.best_university_en || 'N/A'
-  const bestProgram = aiFields.best_program_en || countrySpecificData?.best_program_en || 'N/A'
-  const whyFit = aiFields.why_best_university_en || countrySpecificData?.why_best_university_en || 'No rationale provided.'
 
-  if (!bestUniversity && !bestProgram && !whyFit) {
+  const bestMatch = Array.isArray(matchResults) && matchResults.length > 0
+    ? [...matchResults].sort((a, b) => Number(b.matchPercentage || 0) - Number(a.matchPercentage || 0))[0]
+    : null
+
+  const bestUniversity = bestMatch?.cleanUniversityName || bestMatch?.original_university_string || bestMatch?.university || aiFields.best_university_en || countrySpecificData?.best_university_en || 'N/A'
+  const bestProgram = bestMatch?.programName || bestMatch?.program || aiFields.best_program_en || countrySpecificData?.best_program_en || 'General / N/A'
+
+  const rationaleEn = submission?.ai_match_rationale_en
+    || countrySpecificData?.ai_match_rationale_en
+    || countrySpecificData?._meta?.ai_match_rationale_en
+    || countrySpecificData?._meta?.studyPath?.ai_match_rationale_en
+    || aiFields.why_best_university_en
+    || countrySpecificData?.why_best_university_en
+    || (Array.isArray(bestMatch?.missingRequirements) ? bestMatch.missingRequirements.join(', ') : '')
+    || 'No rationale provided.'
+
+  const rationaleAr = submission?.ai_match_rationale_ar
+    || countrySpecificData?.ai_match_rationale_ar
+    || countrySpecificData?._meta?.ai_match_rationale_ar
+    || countrySpecificData?._meta?.studyPath?.ai_match_rationale_ar
+    || 'لم يتم توفير شرح باللغة العربية.'
+
+  if (!bestUniversity && !bestProgram && !rationaleEn) {
     return ''
   }
 
@@ -375,7 +394,8 @@ function buildAiRecommendationSection(submission, isArabic) {
       <h2 style="margin: 0 0 8px; font-size: 14px; color: #6d28d9;">${escapeHtml(isArabic ? 'توصية الذكاء الاصطناعي' : 'AI Recommendation')}</h2>
       <p style="margin: 6px 0; font-size: 11px;"><strong>${escapeHtml(isArabic ? 'الجامعة' : 'University')}:</strong> ${escapeHtml(bestUniversity)}</p>
       <p style="margin: 6px 0; font-size: 11px;"><strong>${escapeHtml(isArabic ? 'البرنامج' : 'Program')}:</strong> ${escapeHtml(bestProgram)}</p>
-      <p style="margin: 6px 0; font-size: 11px;"><strong>${escapeHtml(isArabic ? 'سبب التوصية' : 'Why this fit')}:</strong> ${escapeHtml(whyFit)}</p>
+      <p style="margin: 6px 0; font-size: 11px;"><strong>${escapeHtml(isArabic ? 'سبب التوصية' : 'Why this fit')}:</strong> ${escapeHtml(rationaleEn)}</p>
+      <p style="margin: 6px 0; font-size: 11px;"><strong>${escapeHtml(isArabic ? 'السبب بالعربية' : 'Arabic rationale')}:</strong> ${escapeHtml(rationaleAr)}</p>
     </div>
   `
 }
@@ -415,7 +435,7 @@ export async function exportUniversityMatchPdf(submission, matchResults, languag
     </div>
   </div>
   <h2>${escapeHtml(isArabic ? 'نتائج المطابقة الكاملة' : 'Full University Match Results')}</h2>
-  ${buildAiRecommendationSection(submission, isArabic)}
+  ${buildAiRecommendationSection(submission, matchResults, isArabic)}
   <table>
     <thead>
       <tr>
