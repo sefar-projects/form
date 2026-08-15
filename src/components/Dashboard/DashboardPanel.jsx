@@ -334,7 +334,6 @@ function DashboardPanel({ language = 'en', onBack, onLogout }) {
                   program: bestMatch.programName || bestMatch.program || 'General',
                   tuition: bestMatch.tuition_fees ?? bestMatch.minimum_fee ?? normalizedLead.normalized_budget_amount ?? normalizedLead.budget_availability ?? lead.budget_availability ?? null,
                 },
-                lead_data: normalizedLead,
               },
             })
 

@@ -557,6 +557,10 @@ export function compareWithAllUniversities(normalizedLead, universityRules = [],
     const isMatch = missingRequirements.length === 0 && totalCount > 0
     let matchPercentage = totalCount === 0 ? 0 : Math.round((matchedCount / totalCount) * 100)
 
+    if (extractedMajor.toLowerCase() === 'general') {
+      matchPercentage = Math.max(0, matchPercentage - 1)
+    }
+
     // 6. Apply the boost ONLY if it's a true match
     if (isMajorMatch) {
       matchPercentage = Math.min(100, Math.round(matchPercentage * 1.2))

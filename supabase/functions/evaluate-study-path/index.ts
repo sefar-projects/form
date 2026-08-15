@@ -9,12 +9,8 @@ serve(async (req: Request) => {
     const payload = await req.json()
 
     if (payload.action === 'generate_rationale') {
-      const targetMatch = payload.target_match || {}
-      const leadData = payload.lead_data || payload
-      const targetUniversity = targetMatch.university || 'the suggested university'
-      const targetProgram = targetMatch.program || 'the recommended program'
-      const targetTuition = targetMatch.tuition || leadData?.tuition_budget_range || 'the available tuition budget'
-      const customPrompt = `You are an expert admissions advisor. The applicant is applying to ${targetUniversity} for ${targetProgram}. Write a highly specific, professional 3-sentence rationale explaining why this is a great academic fit based on their grades and budget. Output ONLY JSON with keys "rationale_en" and "rationale_ar".`
+      const target = payload.target_match
+      const rationaleSystemPrompt = `You are an expert admissions advisor. The applicant is applying to ${target.university} for ${target.program}. Write a highly specific, professional 3-sentence rationale explaining why this is a great academic and financial fit based on their grades and budget. Output ONLY JSON with keys "rationale_en" and "rationale_ar".`
 
       // @ts-ignore
       const apiKey = Deno.env.get('GROQ_API_KEY') || Deno.env.get('GEMINI_API_KEY')
@@ -22,7 +18,7 @@ serve(async (req: Request) => {
         throw new Error('Missing Groq/Gemini API key for targeted rationale generation.')
       }
 
-      const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      const rationaleResponse = await fetch('https://api.groq.com/openai/v1/chat/completions', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${apiKey}`,
@@ -33,27 +29,28 @@ serve(async (req: Request) => {
           temperature: 0.2,
           response_format: { type: 'json_object' },
           messages: [
-            { role: 'system', content: customPrompt },
-            { role: 'user', content: `Applicant profile:\n- Current qualification: ${leadData.normalized_degree || leadData.degree_type || 'High School'}\n- GPA: ${leadData.gpa || 'N/A'}\n- Tuition budget: ${targetTuition}\n- Subject strengths: ${leadData.subject_scores ? JSON.stringify(leadData.subject_scores) : 'Not provided'}\n- Selected countries: ${Array.isArray(leadData.selected_countries) ? leadData.selected_countries.join(', ') : 'Not provided'}` }
+            { role: 'system', content: rationaleSystemPrompt },
+            { role: 'user', content: `Applicant profile:\n- Current qualification: ${payload.lead_data?.normalized_degree || payload.lead_data?.degree_type || 'High School'}\n- GPA: ${payload.lead_data?.gpa || payload.gpa || 'N/A'}\n- Tuition budget: ${target.tuition || payload.lead_data?.tuition_budget_range || 'the available tuition budget'}\n- Subject strengths: ${payload.lead_data?.subject_scores ? JSON.stringify(payload.lead_data.subject_scores) : 'Not provided'}\n- Selected countries: ${Array.isArray(payload.lead_data?.selected_countries) ? payload.lead_data.selected_countries.join(', ') : 'Not provided'}` }
           ]
         })
       })
 
-      const data = await response.json()
-      if (data.error) throw new Error(`Groq Error: ${data.error.message}`)
+      const rationaleData = await rationaleResponse.json()
+      if (rationaleData.error) throw new Error(`Groq Error: ${rationaleData.error.message}`)
 
-      const rawText = data.choices[0].message.content
-      const aiOutput = JSON.parse(rawText.replace(/```json/g, '').replace(/```/g, '').trim())
+      const rationaleText = rationaleData.choices[0].message.content
+      const rationaleJson = JSON.parse(rationaleText.replace(/```json/g, '').replace(/```/g, '').trim())
 
       return new Response(JSON.stringify({
-        rationale_en: aiOutput.rationale_en || aiOutput.reasoning_en || 'Rationale generated but missing key.',
-        rationale_ar: aiOutput.rationale_ar || aiOutput.reasoning_ar || 'لم يتم توفير شرح باللغة العربية.'
+        rationale_en: rationaleJson.rationale_en || rationaleJson.reasoning_en || 'Rationale generated but missing key.',
+        rationale_ar: rationaleJson.rationale_ar || rationaleJson.reasoning_ar || 'لم يتم توفير شرح باللغة العربية.'
       }), {
         headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
       })
     }
 
-    const rawData = payload
+    const leadData = payload.lead_data ? payload.lead_data : payload
+    const rawData = leadData
     const subjectScores = typeof rawData.subject_scores === 'object' && rawData.subject_scores
       ? rawData.subject_scores
       : (typeof rawData.country_specific_data === 'object' && rawData.country_specific_data
