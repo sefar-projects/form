@@ -593,188 +593,73 @@ export function compareWithAllUniversities(normalizedLead, universityRules = [],
   })
 }
 
-export function suggestBestUniversity(leadData, universityRules = [], chancesByCountry = {}) {
-  if (Array.isArray(leadData)) {
-    const sorted = [...leadData].sort((a, b) => {
-      const aHasFit = (a.missingRequirements || []).some((req) => req.includes('✨ Strong Academic Fit'))
-      const bHasFit = (b.missingRequirements || []).some((req) => req.includes('✨ Strong Academic Fit'))
+export function suggestBestUniversity(universitiesOrLead, normalizedLeadOrRules = [], chancesByCountry = {}) {
+  const normalizeMajorText = (value = '') => `${value || ''}`
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+
+  const isRelevantSpecificProgram = (programName, specialization) => {
+    const normalizedProgram = normalizeMajorText(programName)
+    const normalizedSpecialization = normalizeMajorText(specialization)
+
+    if (!normalizedProgram || normalizedProgram === 'general' || !normalizedSpecialization) {
+      return false
+    }
+
+    if (normalizedProgram.includes(normalizedSpecialization)) {
+      return true
+    }
+
+    const specializationTokens = normalizedSpecialization.split(' ').filter((token) => token.length > 2)
+    if (specializationTokens.length === 0) {
+      return false
+    }
+
+    return specializationTokens.every((token) => normalizedProgram.includes(token))
+  }
+
+  if (Array.isArray(universitiesOrLead)) {
+    const sorted = [...universitiesOrLead].sort((a, b) => {
+      const aProgramName = `${a?.programName || a?.program || 'General'}`.trim()
+      const bProgramName = `${b?.programName || b?.program || 'General'}`.trim()
+      const aHasFit = (a?.missingRequirements || []).some((req) => req.includes('✨ Strong Academic Fit'))
+      const bHasFit = (b?.missingRequirements || []).some((req) => req.includes('✨ Strong Academic Fit'))
 
       if (aHasFit && !bHasFit && a.matchPercentage >= 75) return -1
       if (bHasFit && !aHasFit && b.matchPercentage >= 75) return 1
 
-      return b.matchPercentage - a.matchPercentage
+      const safeUserSpecialization = normalizeMajorText(
+        (normalizedLeadOrRules && !Array.isArray(normalizedLeadOrRules) ? normalizedLeadOrRules.specialization1 : null)
+        || (normalizedLeadOrRules && !Array.isArray(normalizedLeadOrRules) ? normalizedLeadOrRules.specialization_1 : null)
+        || (normalizedLeadOrRules && !Array.isArray(normalizedLeadOrRules) && normalizedLeadOrRules.country_specific_data ? normalizedLeadOrRules.country_specific_data.specialization1 : '')
+        || (normalizedLeadOrRules && !Array.isArray(normalizedLeadOrRules) && normalizedLeadOrRules.country_specific_data?._meta?.academic?.specialization1 ? normalizedLeadOrRules.country_specific_data._meta.academic.specialization1 : '')
+        || '',
+      )
+
+      if (safeUserSpecialization) {
+        const aRelevantSpecific = isRelevantSpecificProgram(aProgramName, safeUserSpecialization)
+        const bRelevantSpecific = isRelevantSpecificProgram(bProgramName, safeUserSpecialization)
+        const aIsUnrelatedSpecific = !aHasFit && aProgramName && aProgramName.toLowerCase() !== 'general' && !aRelevantSpecific
+        const bIsUnrelatedSpecific = !bHasFit && bProgramName && bProgramName.toLowerCase() !== 'general' && !bRelevantSpecific
+
+        if (aIsUnrelatedSpecific && !bIsUnrelatedSpecific) return 1
+        if (bIsUnrelatedSpecific && !aIsUnrelatedSpecific) return -1
+      }
+
+      return Number(b?.matchPercentage ?? 0) - Number(a?.matchPercentage ?? 0)
     })
 
     return sorted[0] || null
   }
-  if (!Array.isArray(universityRules) || universityRules.length === 0) {
-    return null
+
+  if (Array.isArray(normalizedLeadOrRules)) {
+    const leadData = universitiesOrLead || {}
+    const universityRules = normalizedLeadOrRules
+    const fullMatchList = compareWithAllUniversities(leadData, universityRules, chancesByCountry?.aiRecommendedMajor || '')
+    return suggestBestUniversity(fullMatchList, leadData)
   }
 
-  const originalSelectedCountries = Array.isArray(leadData?.selected_countries)
-    ? leadData.selected_countries
-    : []
-  const firstCountry = originalSelectedCountries.length > 0 ? originalSelectedCountries[0] : null
-  const selectedCountries = originalSelectedCountries
-    .map((country) => `${country || ''}`.trim().toLowerCase())
-    .filter(Boolean)
-  const countrySpecificData = typeof leadData?.country_specific_data === 'object' && leadData.country_specific_data
-    ? leadData.country_specific_data
-    : {}
-
-  const normalizedLead = normalizeLeadData(leadData || {})
-  const normalizedMarkOn20 = normalizedLead.normalized_gpa_on_20
-  const leadBudget = parseBudgetToNumber(normalizedLead.normalized_budget_amount ?? normalizedLead.budget_availability ?? normalizedLead.budget)
-  const normalizedLanguage = parseIeltsScoreToLanguageRatio(normalizedLead.normalized_ielts_score)
-  const derivedGapYears = calculateGapYears(normalizedLead.date_of_birth || normalizedLead.dob || normalizedLead.dateOfBirth, normalizedLead.last_degree_date || normalizedLead.lastDegreeDate)
-  const ageFromDob = calculateAgeFromDob(normalizedLead.date_of_birth || normalizedLead.dob || normalizedLead.dateOfBirth)
-  const studiedInEnglishBefore = normalizeYesNo(normalizedLead.studied_in_english_before || normalizedLead.studiedInEnglishBefore)
-
-  const candidateRules = universityRules.filter((rule) => {
-    if (selectedCountries.length === 0) return true
-    return selectedCountries.includes(`${rule.country || ''}`.trim().toLowerCase())
-  })
-
-  if (candidateRules.length === 0) {
-    return null
-  }
-
-  const rankedOptions = candidateRules.map((rule) => {
-    const countryKey = `${rule.country || ''}`.trim()
-    const dynamicAnswers = countrySpecificData[countryKey] || {}
-    const targetCountry = ((originalSelectedCountries[0]) || 'poland').toLowerCase()
-    const desiredLevelRaw = (countrySpecificData[targetCountry] && countrySpecificData[targetCountry].desiredLevel) || 'bachelor'
-    const targetLevel = `${desiredLevelRaw}`.toLowerCase()
-    const chancePercentage = Number(chancesByCountry?.[countryKey]?.percentage ?? 0)
-
-    const universityNameRaw = `${rule?.university || rule?.name || 'Unknown university'}`
-    const majorMatch = universityNameRaw.match(/\/+(.+?)\/+/) || null
-    const programName = majorMatch ? majorMatch[1].trim() : 'General'
-    const cleanUniversityName = universityNameRaw.replace(/\/+.*?\/+/, '').trim() || universityNameRaw
-
-    const minimumGpa = parseMinimumGpaTo20Scale(rule?.minimum_gpa)
-    const minimumFee = Number(rule?.minimum_fee ?? 0)
-    const maxGapYears = Number(rule?.max_gap_years ?? 99)
-    const minimumIelts = Number(rule?.minimum_ielts ?? 0)
-    const maxAgeBachelor = Number(rule?.max_age_bachelor ?? 99)
-    const maxAgeMaster = Number(rule?.max_age_master ?? 99)
-    const acceptsEnglishMoi = Boolean(rule?.accepts_english_moi)
-
-    let score = 60
-    const reasons = []
-
-    if (normalizedMarkOn20 >= minimumGpa) {
-      score += 12
-      reasons.push(`GPA eligible (${normalizedMarkOn20.toFixed(1)}/20 >= ${minimumGpa}/20).`)
-    } else {
-      score -= 18
-      reasons.push(`GPA may be below minimum (${normalizedMarkOn20.toFixed(1)}/20 < ${minimumGpa}/20).`)
-    }
-
-    if (minimumFee > 0 && leadBudget >= minimumFee) {
-      score += 10
-      reasons.push(`Budget fits tuition threshold (${leadBudget} >= ${minimumFee}).`)
-    } else if (minimumFee > 0) {
-      score -= 15
-      reasons.push(`Budget may be below tuition threshold (${leadBudget} < ${minimumFee}).`)
-    }
-
-    if (derivedGapYears <= maxGapYears) {
-      score += 8
-      reasons.push(`Academic gap is within limit (${derivedGapYears} <= ${maxGapYears}).`)
-    } else {
-      score -= 12
-      reasons.push(`Academic gap is above limit (${derivedGapYears} > ${maxGapYears}).`)
-    }
-
-    const maxAge = `${targetLevel}`.toLowerCase().includes('master') ? maxAgeMaster : maxAgeBachelor
-    if (ageFromDob <= maxAge) {
-      score += 8
-      reasons.push(`Age profile fits typical limit (${ageFromDob} <= ${maxAge}).`)
-    } else {
-      score -= 10
-      reasons.push(`Age profile may exceed typical limit (${ageFromDob} > ${maxAge}).`)
-    }
-
-    if (acceptsEnglishMoi && studiedInEnglishBefore) {
-      score += 6
-      reasons.push('English MOI accepted and applicant studied in English.')
-    } else if (minimumIelts > 0) {
-      const inferredIelts = normalizedLanguage * 9
-      if (inferredIelts >= minimumIelts) {
-        score += 6
-        reasons.push(`Language profile likely meets IELTS threshold (${inferredIelts.toFixed(1)} >= ${minimumIelts}).`)
-      } else {
-        score -= 8
-        reasons.push(`Language profile may be below IELTS threshold (${inferredIelts.toFixed(1)} < ${minimumIelts}).`)
-      }
-    }
-
-    try {
-      const level1 = `${rule?.level_1 || ''}`.trim().toLowerCase()
-      const level2 = `${rule?.level_2 || ''}`.trim().toLowerCase()
-      const levelsPresent = [level1, level2].filter((l) => l && l !== '-' && l !== 'null' && l !== 'undefined')
-      const levelMatch = (level1 === targetLevel) || (level2 === targetLevel) || (level1.includes(targetLevel)) || (level2.includes(targetLevel))
-
-      if (levelsPresent.length === 0) {
-        score += 5
-        reasons.push('Program level appears supported (no specified restrictions).')
-      } else if (levelMatch) {
-        score += 5
-        reasons.push(`Program level fits target (${targetLevel}).`)
-      } else {
-        reasons.push(`Target level (${targetLevel}) not offered by university.`)
-      }
-    } catch (e) {
-      reasons.push('Program level check skipped due to unexpected data structure.')
-    }
-
-    score += Math.max(0, Math.min(20, chancePercentage / 5))
-
-    const boundedScore100 = Math.max(0, Math.min(100, Math.round(score)))
-    let boundedScore10 = Math.max(0, Math.min(10, Number((boundedScore100 / 10).toFixed(1))))
-    const countryCap = Number(chancesByCountry?.[countryKey]?.recommendationCap)
-    if (Number.isFinite(countryCap) && countryCap > 0 && boundedScore10 > countryCap) {
-      boundedScore10 = countryCap
-      reasons.push(`Recommendation capped at ${countryCap}/10 due to a critical requirement failure.`)
-    }
-
-    return {
-      country: rule.country,
-      university: cleanUniversityName,
-      original_university_string: universityNameRaw,
-      cleanUniversityName,
-      programName,
-      program: programName,
-      recommendation_score: boundedScore10,
-      recommendation_score_100: Math.round(boundedScore10 * 10),
-      reasons,
-      isGeneralProgram: `${programName}`.trim().toLowerCase() === 'general',
-      hasStrongAcademicFit: reasons.some((reason) => reason.includes('Strong Academic Fit')),
-    }
-  }).sort((a, b) => {
-    const aHasFit = a.hasStrongAcademicFit
-    const bHasFit = b.hasStrongAcademicFit
-    const aIsGeneral = a.isGeneralProgram
-    const bIsGeneral = b.isGeneralProgram
-
-    if (aHasFit && !bHasFit && a.recommendation_score >= 7.5) return -1
-    if (bHasFit && !aHasFit && b.recommendation_score >= 7.5) return 1
-    if (aIsGeneral && !bIsGeneral) return 1
-    if (bIsGeneral && !aIsGeneral) return -1
-    return b.recommendation_score - a.recommendation_score
-  })
-
-  const bestOption = rankedOptions[0] || null
-
-  if (bestOption && firstCountry && chancesByCountry[firstCountry]?.recommendationCap) {
-    const cap = Number(chancesByCountry[firstCountry].recommendationCap)
-    if (Number.isFinite(cap)) {
-      bestOption.recommendation_score = Math.min(bestOption.recommendation_score, cap)
-      bestOption.recommendation_score_100 = Math.round(bestOption.recommendation_score * 10)
-      bestOption.reasons.push(`Final recommendation capped at ${cap}/10 for ${firstCountry}.`)
-    }
-  }
-
-  return bestOption
+  return null
 }

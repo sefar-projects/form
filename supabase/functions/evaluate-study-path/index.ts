@@ -126,13 +126,14 @@ serve(async (req: Request) => {
 
     CRITICAL EVALUATION RULES:
     1. CURRENT DEGREE: The applicant holds a "${degree}". If it is a High School / Baccalaureate degree, NEVER suggest a Master's program. Only suggest Bachelor's or Foundation (Preparatory) programs.
-    2. LANGUAGE LEVEL: The applicant's level is "${englishLevel}" (IELTS Equivalent: ${ieltsEquivalent}).
+    2. ACADEMIC TRANSITION ANALYSIS: Evaluate the transition from the applicant's previous academic background to the target degree and target major. Explicitly assess whether their prior track (e.g., Science, Commerce, Humanities, Engineering, Computer Science, etc.) supports the new field, and note any academic bridge required. If the change is significant, flag the need for foundation courses, bridging modules, or a preparatory year before direct admission.
+    3. LANGUAGE LEVEL: The applicant's level is "${englishLevel}" (IELTS Equivalent: ${ieltsEquivalent}).
        - If IELTS is less than 5.5, direct admission to English-taught European universities is a HIGH VISA RISK. You MUST recommend a "Preparatory English / Foundation Year" or "Language Course" as an actionable step.
-    3. FINANCIAL PROFILE: Sponsor Annual Income is "${sponsorIncome}" and Tuition Budget is "${tuitionBudget}".
+    4. FINANCIAL PROFILE: Sponsor Annual Income is "${sponsorIncome}" and Tuition Budget is "${tuitionBudget}".
        - Evaluate if this budget is sufficient for European tuition (average €2,000 - €3,500/year) and living expenses. Highlight financial risk if tuition budget is below €2,500.
-    4. AGE PROFILE: Applicant is ${age} years old. Flag any unexplained study gaps if age is over 22 for Bachelor applications.
-    5. CAREER COUNSELOR RULE: Analyze the applicant's highest subject_scores alongside their current degree type. Deduce their strongest academic field. You MUST recommend the single best university major category for them (e.g., 'Computer Science', 'Engineering', 'Business', 'Languages', 'Journalism'). Base this strictly on logical deduction of their highest grades.
-    6. UNIVERSITY CRITERIA CONTEXT: You are given the actual universities and programs available in the database. Use these university names and embedded program names to suggest the best fit from the available options, not invented universities. Explain which university and program best matches the student's academic profile and why.
+    5. AGE PROFILE: Applicant is ${age} years old. Flag any unexplained study gaps if age is over 22 for Bachelor applications.
+    6. CAREER COUNSELOR RULE: Analyze the applicant's highest subject_scores alongside their current degree type and previous academic track. Deduce their strongest academic field. You MUST recommend the single best university major category for them (e.g., 'Computer Science', 'Engineering', 'Business', 'Languages', 'Journalism'). Base this strictly on logical deduction of their highest grades and the transition quality from their prior study area to that major.
+    7. UNIVERSITY CRITERIA CONTEXT: You are given the actual universities and programs available in the database. Use these university names and embedded program names to suggest the best fit from the available options, not invented universities. Explain which university and program best matches the student's academic profile and why, including the academic transition strength or gap.
 
     Available university criteria rows:
     ${universityCriteriaContext}

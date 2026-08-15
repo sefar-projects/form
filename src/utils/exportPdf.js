@@ -337,7 +337,17 @@ function renderUniversityMatchRows(results, isArabic) {
     return `<tbody><tr><td colspan="6">${escapeHtml(isArabic ? 'لا توجد نتائج للمطابقة.' : 'No university match results available.')}</td></tr></tbody>`
   }
 
-  const rowsHtml = results.map((result) => {
+  const topResults = [...results]
+    .filter((result) => result && typeof result === 'object')
+    .sort((a, b) => {
+      const aScore = Number(a.matchPercentage ?? a.recommendation_score ?? 0)
+      const bScore = Number(b.matchPercentage ?? b.recommendation_score ?? 0)
+      if (bScore !== aScore) return bScore - aScore
+      return Number(b.isMatch ?? 0) - Number(a.isMatch ?? 0)
+    })
+    .slice(0, 5)
+
+  const rowsHtml = topResults.map((result) => {
     const universityName = result.cleanUniversityName || result.university || 'Unknown university'
     const programName = result.programName || result.program || 'General'
     const matchLabel = result.isMatch ? (isArabic ? 'مؤهل' : 'Eligible') : (isArabic ? 'غير مؤهل' : 'Not Eligible')
@@ -350,7 +360,7 @@ function renderUniversityMatchRows(results, isArabic) {
         <td>${escapeHtml(universityName)}</td>
         <td>${escapeHtml(programName)}</td>
         <td>${escapeHtml(result.country)}</td>
-        <td>${escapeHtml(String(result.matchPercentage))}%</td>
+        <td>${escapeHtml(String(result.matchPercentage ?? 0))}%</td>
         <td>${escapeHtml(matchLabel)}</td>
         <td>${escapeHtml(missingText)}</td>
       </tr>`
@@ -434,7 +444,7 @@ export async function exportUniversityMatchPdf(submission, matchResults, languag
       </div>
     </div>
   </div>
-  <h2>${escapeHtml(isArabic ? 'نتائج المطابقة الكاملة' : 'Full University Match Results')}</h2>
+  <h2>${escapeHtml(isArabic ? 'أفضل 5 نتائج مطابقة' : 'Top 5 Best Match Results')}</h2>
   ${buildAiRecommendationSection(submission, matchResults, isArabic)}
   <table>
     <thead>

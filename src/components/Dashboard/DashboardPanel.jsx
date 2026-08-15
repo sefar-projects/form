@@ -320,7 +320,7 @@ function DashboardPanel({ language = 'en', onBack, onLogout }) {
           )
 
           const fullMatchList = compareWithAllUniversities(normalizedLead, universityRules)
-          const bestMatch = suggestBestUniversity(fullMatchList)
+          const bestMatch = suggestBestUniversity(fullMatchList, normalizedLead)
 
           let rationaleEn = 'Rationale not generated.'
           let rationaleAr = 'لم يتم توفير شرح باللغة العربية.'
