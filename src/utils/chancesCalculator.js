@@ -579,8 +579,8 @@ export function compareWithAllUniversities(normalizedLead, universityRules = [],
       rule,
     }
   }).sort((a, b) => {
-    const aHasFit = a.missingRequirements.some((req) => req.includes(' Strong Academic Fit'))
-    const bHasFit = b.missingRequirements.some((req) => req.includes(' Strong Academic Fit'))
+    const aHasFit = (a.missingRequirements || []).some((req) => req.includes('✨ Strong Academic Fit'))
+    const bHasFit = (b.missingRequirements || []).some((req) => req.includes('✨ Strong Academic Fit'))
 
     if (aHasFit && !bHasFit && a.matchPercentage >= 75) return -1
     if (bHasFit && !aHasFit && b.matchPercentage >= 75) return 1
@@ -590,6 +590,19 @@ export function compareWithAllUniversities(normalizedLead, universityRules = [],
 }
 
 export function suggestBestUniversity(leadData, universityRules = [], chancesByCountry = {}) {
+  if (Array.isArray(leadData)) {
+    const sorted = [...leadData].sort((a, b) => {
+      const aHasFit = (a.missingRequirements || []).some((req) => req.includes('✨ Strong Academic Fit'))
+      const bHasFit = (b.missingRequirements || []).some((req) => req.includes('✨ Strong Academic Fit'))
+
+      if (aHasFit && !bHasFit && a.matchPercentage >= 75) return -1
+      if (bHasFit && !aHasFit && b.matchPercentage >= 75) return 1
+
+      return b.matchPercentage - a.matchPercentage
+    })
+
+    return sorted[0] || null
+  }
   if (!Array.isArray(universityRules) || universityRules.length === 0) {
     return null
   }

@@ -163,9 +163,9 @@ function DashboardPanel({ language = 'en', onBack, onLogout }) {
   const getAiRecommendationForRow = (row) => {
     const countrySpecificData = parseObjectValue(row.country_specific_data)
     return {
-      best_university_en: countrySpecificData?._meta?.studyPath?.best_university_en || countrySpecificData?.best_university_en || null,
-      best_program_en: countrySpecificData?._meta?.studyPath?.best_program_en || countrySpecificData?.best_program_en || null,
-      why_best_university_en: countrySpecificData?._meta?.studyPath?.why_best_university_en || countrySpecificData?.why_best_university_en || null,
+      best_university_en: countrySpecificData?.best_match_university || countrySpecificData?._meta?.studyPath?.best_university_en || countrySpecificData?.best_university_en || null,
+      best_program_en: countrySpecificData?.best_match_program || countrySpecificData?._meta?.studyPath?.best_program_en || countrySpecificData?.best_program_en || null,
+      why_best_university_en: countrySpecificData?.ai_match_rationale_en || countrySpecificData?._meta?.studyPath?.ai_match_rationale_en || countrySpecificData?._meta?.studyPath?.why_best_university_en || countrySpecificData?.why_best_university_en || null,
       general_info_en: countrySpecificData?._meta?.studyPath?.general_info_en || countrySpecificData?.general_info_en || null,
     }
   }
@@ -319,26 +319,22 @@ function DashboardPanel({ language = 'en', onBack, onLogout }) {
             aiResult.relevance_score,
           )
 
-          const recommendation = suggestBestUniversity(
-            normalizedLead,
-            universityRules,
-            scorePayload,
-          )
+          const fullMatchList = compareWithAllUniversities(normalizedLead, universityRules)
+          const bestMatch = suggestBestUniversity(fullMatchList)
 
-          let rationaleEn = null
-          let rationaleAr = null
+          let rationaleEn = 'Rationale not generated.'
+          let rationaleAr = 'لم يتم توفير شرح باللغة العربية.'
 
-          if (recommendation) {
-            const targetMatch = {
-              university: recommendation.cleanUniversityName || recommendation.university || recommendation.original_university_string || 'Unknown university',
-              program: recommendation.programName || recommendation.program || 'General',
-              tuition: recommendation.tuition_fees ?? recommendation.minimum_fee ?? normalizedLead.normalized_budget_amount ?? normalizedLead.budget_availability ?? lead.budget_availability ?? null,
-            }
-
+          if (bestMatch) {
             const rationaleResponse = await supabase.functions.invoke('evaluate-study-path', {
               body: {
-                ...normalizedLead,
-                target_match: targetMatch,
+                action: 'generate_rationale',
+                target_match: {
+                  university: bestMatch.cleanUniversityName || bestMatch.university || bestMatch.original_university_string || 'Unknown university',
+                  program: bestMatch.programName || bestMatch.program || 'General',
+                  tuition: bestMatch.tuition_fees ?? bestMatch.minimum_fee ?? normalizedLead.normalized_budget_amount ?? normalizedLead.budget_availability ?? lead.budget_availability ?? null,
+                },
+                lead_data: normalizedLead,
               },
             })
 
@@ -346,8 +342,8 @@ function DashboardPanel({ language = 'en', onBack, onLogout }) {
             if (rationaleResponse?.error) {
               console.error('Second-pass rationale failed:', rationaleResponse.error)
             } else {
-              rationaleEn = rationaleData?.rationale_en || rationaleData?.study_path_explanation || rationaleData?.reasoning_en || 'Rationale generated but missing key.'
-              rationaleAr = rationaleData?.rationale_ar || 'لم يتم توفير شرح باللغة العربية.'
+              rationaleEn = rationaleData?.rationale_en || rationaleData?.study_path_explanation || rationaleData?.reasoning_en || rationaleEn
+              rationaleAr = rationaleData?.rationale_ar || rationaleAr
             }
           }
 
@@ -358,23 +354,28 @@ function DashboardPanel({ language = 'en', onBack, onLogout }) {
               studyPath: {
                 ...previousStudyPath,
                 ...aiResult,
-                ...(rationaleEn ? { ai_match_rationale_en: rationaleEn } : {}),
-                ...(rationaleAr ? { ai_match_rationale_ar: rationaleAr } : {}),
+                best_university_en: bestMatch ? (bestMatch.cleanUniversityName || bestMatch.university || bestMatch.original_university_string || 'Unknown university') : null,
+                best_program_en: bestMatch ? (bestMatch.programName || bestMatch.program || 'General') : null,
+                ai_match_rationale_en: rationaleEn,
+                ai_match_rationale_ar: rationaleAr,
               },
-              recommendation,
-              ai_match_rationale_en: rationaleEn || existingCountryData?._meta?.ai_match_rationale_en || null,
-              ai_match_rationale_ar: rationaleAr || existingCountryData?._meta?.ai_match_rationale_ar || null,
+              recommendation: bestMatch,
+              ai_match_rationale_en: rationaleEn,
+              ai_match_rationale_ar: rationaleAr,
             },
-            ai_match_rationale_en: rationaleEn || existingCountryData?.ai_match_rationale_en || null,
-            ai_match_rationale_ar: rationaleAr || existingCountryData?.ai_match_rationale_ar || null,
+            best_match_university: bestMatch ? (bestMatch.cleanUniversityName || bestMatch.university || bestMatch.original_university_string || 'Unknown university') : null,
+            best_match_program: bestMatch ? (bestMatch.programName || bestMatch.program || 'General') : null,
+            ai_match_rationale_en: rationaleEn,
+            ai_match_rationale_ar: rationaleAr,
+            full_match_results: fullMatchList,
           }
 
           const updatePayload = {
             study_path_score: aiResult.relevance_score ?? null,
             study_path_explanation: aiResult.reasoning ?? null,
             ai_recommended_major: aiResult.recommended_major_en ?? previousStudyPath.recommended_major_en ?? null,
-            ai_match_rationale_en: rationaleEn || null,
-            ai_match_rationale_ar: rationaleAr || null,
+            ai_match_rationale_en: rationaleEn,
+            ai_match_rationale_ar: rationaleAr,
             agency_internal_score: scorePayload,
             country_specific_data: updatedCountryData,
           }
@@ -614,16 +615,20 @@ function DashboardPanel({ language = 'en', onBack, onLogout }) {
                       <p className="mt-2 text-sm text-slate-700">{row.study_path_explanation || 'No AI explanation available.'}</p>
 
                       {(() => {
-                        const aiRecommendation = getAiRecommendationForRow(row)
-                        const hasAiRecommendation = aiRecommendation.best_university_en || aiRecommendation.best_program_en || aiRecommendation.why_best_university_en
+                        const rowCountrySpecificData = parseObjectValue(row.country_specific_data)
+                        const bestMatchUniversity = rowCountrySpecificData?.best_match_university || rowCountrySpecificData?._meta?.studyPath?.best_university_en || 'Not Available'
+                        const bestMatchProgram = rowCountrySpecificData?.best_match_program || rowCountrySpecificData?._meta?.studyPath?.best_program_en || 'Not Available'
+                        const bestMatchRationale = rowCountrySpecificData?.ai_match_rationale_en || rowCountrySpecificData?._meta?.studyPath?.ai_match_rationale_en || 'Rationale not available.'
+                        const hasAiRecommendation = bestMatchUniversity !== 'Not Available' || bestMatchProgram !== 'Not Available' || bestMatchRationale !== 'Rationale not available.'
+
                         if (!hasAiRecommendation) return null
 
                         return (
                           <div className="mt-4 rounded-xl border border-violet-200 bg-violet-50 p-3">
                             <p className="text-xs font-semibold uppercase tracking-[0.12em] text-violet-700">AI Recommendation</p>
-                            <p className="mt-2 text-sm text-slate-800"><span className="font-semibold">University:</span> {aiRecommendation.best_university_en || 'N/A'}</p>
-                            <p className="mt-1 text-sm text-slate-800"><span className="font-semibold">Program:</span> {aiRecommendation.best_program_en || 'N/A'}</p>
-                            <p className="mt-2 text-xs text-slate-700"><span className="font-semibold">Why this fit:</span> {aiRecommendation.why_best_university_en || 'No rationale provided.'}</p>
+                            <p className="mt-2 text-sm text-slate-800"><span className="font-semibold">University:</span> {bestMatchUniversity}</p>
+                            <p className="mt-1 text-sm text-slate-800"><span className="font-semibold">Program:</span> {bestMatchProgram}</p>
+                            <p className="mt-2 text-xs text-slate-700"><span className="font-semibold">Why this fit:</span> {bestMatchRationale}</p>
                           </div>
                         )
                       })()}

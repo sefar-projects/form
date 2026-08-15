@@ -7,16 +7,17 @@ serve(async (req: Request) => {
 
   try {
     const payload = await req.json()
-    const targetMatch = payload?.target_match
 
-    if (targetMatch) {
-      // @ts-ignore
-      const apiKey = Deno.env.get('GROQ_API_KEY') || Deno.env.get('GEMINI_API_KEY')
+    if (payload.action === 'generate_rationale') {
+      const targetMatch = payload.target_match || {}
+      const leadData = payload.lead_data || payload
       const targetUniversity = targetMatch.university || 'the suggested university'
       const targetProgram = targetMatch.program || 'the recommended program'
-      const targetTuition = targetMatch.tuition || payload?.tuition_budget_range || 'the available tuition budget'
+      const targetTuition = targetMatch.tuition || leadData?.tuition_budget_range || 'the available tuition budget'
       const customPrompt = `You are an expert admissions advisor. The applicant is applying to ${targetUniversity} for ${targetProgram}. Write a highly specific, professional 3-sentence rationale explaining why this is a great academic fit based on their grades and budget. Output ONLY JSON with keys "rationale_en" and "rationale_ar".`
 
+      // @ts-ignore
+      const apiKey = Deno.env.get('GROQ_API_KEY') || Deno.env.get('GEMINI_API_KEY')
       if (!apiKey) {
         throw new Error('Missing Groq/Gemini API key for targeted rationale generation.')
       }
@@ -33,7 +34,7 @@ serve(async (req: Request) => {
           response_format: { type: 'json_object' },
           messages: [
             { role: 'system', content: customPrompt },
-            { role: 'user', content: `Applicant profile:\n- Current qualification: ${payload.normalized_degree || payload.degree_type || 'High School'}\n- GPA: ${payload.gpa || 'N/A'}\n- Tuition budget: ${targetTuition}\n- Subject strengths: ${payload.subject_scores ? JSON.stringify(payload.subject_scores) : 'Not provided'}\n- Selected countries: ${Array.isArray(payload.selected_countries) ? payload.selected_countries.join(', ') : 'Not provided'}` }
+            { role: 'user', content: `Applicant profile:\n- Current qualification: ${leadData.normalized_degree || leadData.degree_type || 'High School'}\n- GPA: ${leadData.gpa || 'N/A'}\n- Tuition budget: ${targetTuition}\n- Subject strengths: ${leadData.subject_scores ? JSON.stringify(leadData.subject_scores) : 'Not provided'}\n- Selected countries: ${Array.isArray(leadData.selected_countries) ? leadData.selected_countries.join(', ') : 'Not provided'}` }
           ]
         })
       })
@@ -52,11 +53,8 @@ serve(async (req: Request) => {
       })
     }
 
-    const subjectScores = typeof payload.subject_scores === 'object' && payload.subject_scores
-      ? payload.subject_scores
-      : (typeof payload.country_specific_data === 'object' && payload.country_specific_data
-        ? payload.country_specific_data?._meta?.academic?.subject_scores || {}
-        : {})
+    const rawData = payload
+    const subjectScores = typeof rawData.subject_scores === 'object' && rawData.subject_scores
       ? rawData.subject_scores
       : (typeof rawData.country_specific_data === 'object' && rawData.country_specific_data
         ? rawData.country_specific_data?._meta?.academic?.subject_scores || {}
