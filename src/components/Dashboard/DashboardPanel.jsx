@@ -335,18 +335,19 @@ function DashboardPanel({ language = 'en', onBack, onLogout }) {
               tuition: recommendation.tuition_fees ?? recommendation.minimum_fee ?? normalizedLead.normalized_budget_amount ?? normalizedLead.budget_availability ?? lead.budget_availability ?? null,
             }
 
-            const { data: secondPassData, error: secondPassError } = await supabase.functions.invoke('evaluate-study-path', {
+            const rationaleResponse = await supabase.functions.invoke('evaluate-study-path', {
               body: {
                 ...normalizedLead,
                 target_match: targetMatch,
               },
             })
 
-            if (secondPassError) {
-              console.error('Second-pass rationale failed:', secondPassError)
+            const rationaleData = rationaleResponse?.data || {}
+            if (rationaleResponse?.error) {
+              console.error('Second-pass rationale failed:', rationaleResponse.error)
             } else {
-              rationaleEn = secondPassData?.rationale_en || secondPassData?.reasoning_en || null
-              rationaleAr = secondPassData?.rationale_ar || secondPassData?.reasoning_ar || null
+              rationaleEn = rationaleData?.rationale_en || rationaleData?.study_path_explanation || rationaleData?.reasoning_en || 'Rationale generated but missing key.'
+              rationaleAr = rationaleData?.rationale_ar || 'لم يتم توفير شرح باللغة العربية.'
             }
           }
 

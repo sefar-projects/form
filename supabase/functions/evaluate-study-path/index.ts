@@ -6,19 +6,16 @@ serve(async (req: Request) => {
   }
 
   try {
-    const rawData = await req.json()
-    // @ts-ignore
-    const apiKey = Deno.env.get('GROQ_API_KEY') || Deno.env.get('GEMINI_API_KEY')
-    const targetMatch = rawData?.target_match && typeof rawData.target_match === 'object' ? rawData.target_match : null
+    const payload = await req.json()
+    const targetMatch = payload?.target_match
 
     if (targetMatch) {
+      // @ts-ignore
+      const apiKey = Deno.env.get('GROQ_API_KEY') || Deno.env.get('GEMINI_API_KEY')
       const targetUniversity = targetMatch.university || 'the suggested university'
       const targetProgram = targetMatch.program || 'the recommended program'
-      const targetTuition = targetMatch.tuition || rawData?.tuition_budget_range || 'the available tuition budget'
-
-      const systemPrompt = `You are an expert academic admissions advisor. The system has calculated that the best university for this applicant is ${targetUniversity} for the ${targetProgram} program. Write a persuasive, professional 3-sentence rationale explaining why this is a strong academic and financial fit. You MUST reference their specific high school grades/degree and their tuition budget in your explanation.`
-
-      const userPrompt = `Applicant profile:\n- Current qualification: ${rawData.normalized_degree || rawData.degree_type || 'High School'}\n- GPA: ${rawData.gpa || 'N/A'}\n- Tuition budget: ${targetTuition}\n- Subject strengths: ${rawData.subject_scores ? JSON.stringify(rawData.subject_scores) : 'Not provided'}\n- Selected countries: ${Array.isArray(rawData.selected_countries) ? rawData.selected_countries.join(', ') : 'Not provided'}`
+      const targetTuition = targetMatch.tuition || payload?.tuition_budget_range || 'the available tuition budget'
+      const customPrompt = `You are an expert admissions advisor. The applicant is applying to ${targetUniversity} for ${targetProgram}. Write a highly specific, professional 3-sentence rationale explaining why this is a great academic fit based on their grades and budget. Output ONLY JSON with keys "rationale_en" and "rationale_ar".`
 
       if (!apiKey) {
         throw new Error('Missing Groq/Gemini API key for targeted rationale generation.')
@@ -33,11 +30,11 @@ serve(async (req: Request) => {
         body: JSON.stringify({
           model: 'llama-3.3-70b-versatile',
           temperature: 0.2,
+          response_format: { type: 'json_object' },
           messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: userPrompt }
-          ],
-          response_format: { type: 'json_object' }
+            { role: 'system', content: customPrompt },
+            { role: 'user', content: `Applicant profile:\n- Current qualification: ${payload.normalized_degree || payload.degree_type || 'High School'}\n- GPA: ${payload.gpa || 'N/A'}\n- Tuition budget: ${targetTuition}\n- Subject strengths: ${payload.subject_scores ? JSON.stringify(payload.subject_scores) : 'Not provided'}\n- Selected countries: ${Array.isArray(payload.selected_countries) ? payload.selected_countries.join(', ') : 'Not provided'}` }
+          ]
         })
       })
 
@@ -48,14 +45,18 @@ serve(async (req: Request) => {
       const aiOutput = JSON.parse(rawText.replace(/```json/g, '').replace(/```/g, '').trim())
 
       return new Response(JSON.stringify({
-        rationale_en: aiOutput.rationale_en || aiOutput.reasoning_en || 'Not provided',
+        rationale_en: aiOutput.rationale_en || aiOutput.reasoning_en || 'Rationale generated but missing key.',
         rationale_ar: aiOutput.rationale_ar || aiOutput.reasoning_ar || 'لم يتم توفير شرح باللغة العربية.'
       }), {
         headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
       })
     }
 
-    const subjectScores = typeof rawData.subject_scores === 'object' && rawData.subject_scores
+    const subjectScores = typeof payload.subject_scores === 'object' && payload.subject_scores
+      ? payload.subject_scores
+      : (typeof payload.country_specific_data === 'object' && payload.country_specific_data
+        ? payload.country_specific_data?._meta?.academic?.subject_scores || {}
+        : {})
       ? rawData.subject_scores
       : (typeof rawData.country_specific_data === 'object' && rawData.country_specific_data
         ? rawData.country_specific_data?._meta?.academic?.subject_scores || {}

@@ -579,13 +579,13 @@ export function compareWithAllUniversities(normalizedLead, universityRules = [],
       rule,
     }
   }).sort((a, b) => {
-    if (a.matchPercentage !== b.matchPercentage) {
-      return b.matchPercentage - a.matchPercentage
-    }
-    if (a.isMatch === b.isMatch) {
-      return a.university.localeCompare(b.university)
-    }
-    return a.isMatch ? -1 : 1
+    const aHasFit = a.missingRequirements.some((req) => req.includes(' Strong Academic Fit'))
+    const bHasFit = b.missingRequirements.some((req) => req.includes(' Strong Academic Fit'))
+
+    if (aHasFit && !bHasFit && a.matchPercentage >= 75) return -1
+    if (bHasFit && !aHasFit && b.matchPercentage >= 75) return 1
+
+    return b.matchPercentage - a.matchPercentage
   })
 }
 
@@ -622,12 +622,9 @@ export function suggestBestUniversity(leadData, universityRules = [], chancesByC
     return null
   }
 
-  let bestOption = null
-
-  candidateRules.forEach((rule) => {
+  const rankedOptions = candidateRules.map((rule) => {
     const countryKey = `${rule.country || ''}`.trim()
     const dynamicAnswers = countrySpecificData[countryKey] || {}
-    // Extract target/desired level from country-specific responses (default to 'bachelor')
     const targetCountry = ((originalSelectedCountries[0]) || 'poland').toLowerCase()
     const desiredLevelRaw = (countrySpecificData[targetCountry] && countrySpecificData[targetCountry].desiredLevel) || 'bachelor'
     const targetLevel = `${desiredLevelRaw}`.toLowerCase()
@@ -696,31 +693,25 @@ export function suggestBestUniversity(leadData, universityRules = [], chancesByC
       }
     }
 
-    // Program level check: compare applicant's target level against university offerings
     try {
       const level1 = `${rule?.level_1 || ''}`.trim().toLowerCase()
       const level2 = `${rule?.level_2 || ''}`.trim().toLowerCase()
       const levelsPresent = [level1, level2].filter((l) => l && l !== '-' && l !== 'null' && l !== 'undefined')
-
       const levelMatch = (level1 === targetLevel) || (level2 === targetLevel) || (level1.includes(targetLevel)) || (level2.includes(targetLevel))
 
       if (levelsPresent.length === 0) {
-        // No explicit restrictions — treat as supported
         score += 5
         reasons.push('Program level appears supported (no specified restrictions).')
       } else if (levelMatch) {
         score += 5
         reasons.push(`Program level fits target (${targetLevel}).`)
       } else {
-        // Do not apply the old harsh penalty; report reason only
         reasons.push(`Target level (${targetLevel}) not offered by university.`)
       }
     } catch (e) {
-      // If any unexpected structure, don't penalize
       reasons.push('Program level check skipped due to unexpected data structure.')
     }
 
-    // Reuse calculated country chance to bias recommendation toward stronger overall outcomes.
     score += Math.max(0, Math.min(20, chancePercentage / 5))
 
     const boundedScore100 = Math.max(0, Math.min(100, Math.round(score)))
@@ -731,7 +722,7 @@ export function suggestBestUniversity(leadData, universityRules = [], chancesByC
       reasons.push(`Recommendation capped at ${countryCap}/10 due to a critical requirement failure.`)
     }
 
-    const option = {
+    return {
       country: rule.country,
       university: cleanUniversityName,
       original_university_string: universityNameRaw,
@@ -741,12 +732,23 @@ export function suggestBestUniversity(leadData, universityRules = [], chancesByC
       recommendation_score: boundedScore10,
       recommendation_score_100: Math.round(boundedScore10 * 10),
       reasons,
+      isGeneralProgram: `${programName}`.trim().toLowerCase() === 'general',
+      hasStrongAcademicFit: reasons.some((reason) => reason.includes('Strong Academic Fit')),
     }
+  }).sort((a, b) => {
+    const aHasFit = a.hasStrongAcademicFit
+    const bHasFit = b.hasStrongAcademicFit
+    const aIsGeneral = a.isGeneralProgram
+    const bIsGeneral = b.isGeneralProgram
 
-    if (!bestOption || option.recommendation_score > bestOption.recommendation_score) {
-      bestOption = option
-    }
+    if (aHasFit && !bHasFit && a.recommendation_score >= 7.5) return -1
+    if (bHasFit && !aHasFit && b.recommendation_score >= 7.5) return 1
+    if (aIsGeneral && !bIsGeneral) return 1
+    if (bIsGeneral && !aIsGeneral) return -1
+    return b.recommendation_score - a.recommendation_score
   })
+
+  const bestOption = rankedOptions[0] || null
 
   if (bestOption && firstCountry && chancesByCountry[firstCountry]?.recommendationCap) {
     const cap = Number(chancesByCountry[firstCountry].recommendationCap)
