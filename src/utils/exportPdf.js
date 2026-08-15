@@ -332,9 +332,52 @@ function openPrintIframe(html) {
   })
 }
 
-function renderUniversityMatchRows(results, isArabic) {
+function getLeadSubjectScores(submission) {
+  const countryData = parseObjectValue(submission?.country_specific_data)
+  const rawScores = submission?.subject_scores || countryData?._meta?.academic?.subject_scores || {}
+
+  const normalized = {
+    m_t: rawScores.m_t ?? rawScores.math ?? rawScores['Math'] ?? rawScores['m math'] ?? null,
+    phy: rawScores.phy ?? rawScores.physics ?? rawScores['Physics'] ?? null,
+    se: rawScores.se ?? rawScores.science ?? rawScores['Science'] ?? null,
+    lng: rawScores.lng ?? rawScores.languages ?? rawScores['Languages'] ?? null,
+    eco: rawScores.eco ?? rawScores.economics ?? rawScores['Economics'] ?? null,
+    geo_his: rawScores.geo_his ?? rawScores['geo-his'] ?? rawScores['History&Geography'] ?? rawScores.history_geo ?? null,
+  }
+
+  return Object.fromEntries(
+    Object.entries(normalized).filter(([, value]) => value !== null && value !== undefined && value !== ''),
+  )
+}
+
+function renderLeadSubjectSummary(submission, isArabic) {
+  const subjectScores = getLeadSubjectScores(submission)
+  if (Object.keys(subjectScores).length === 0) {
+    return ''
+  }
+
+  const labelMap = {
+    m_t: isArabic ? 'رياضيات' : 'Math',
+    phy: isArabic ? 'فيزياء' : 'Physics',
+    se: isArabic ? 'علوم' : 'Science',
+    lng: isArabic ? 'لغات' : 'Languages',
+    eco: isArabic ? 'اقتصاد' : 'Economics',
+    geo_his: isArabic ? 'تاريخ وجغرافيا' : 'History & Geo',
+  }
+
+  const summary = Object.entries(subjectScores)
+    .map(([key, value]) => `${labelMap[key] || key}: ${value}`)
+    .join(' • ')
+
+  return `
+    <div style="margin: 8px 0 14px; border: 1px solid #dbeafe; background: #f8fbff; border-radius: 8px; padding: 10px; font-size: 11px;">
+      <strong>${escapeHtml(isArabic ? 'درجات الطالب الأكاديمية' : 'Student Subject Scores')}:</strong> ${escapeHtml(summary)}
+    </div>`
+}
+
+function renderUniversityMatchRows(results, isArabic, submission = {}) {
   if (!Array.isArray(results) || results.length === 0) {
-    return `<tbody><tr><td colspan="6">${escapeHtml(isArabic ? 'لا توجد نتائج للمطابقة.' : 'No university match results available.')}</td></tr></tbody>`
+    return `<tbody><tr><td colspan="7">${escapeHtml(isArabic ? 'لا توجد نتائج للمطابقة.' : 'No university match results available.')}</td></tr></tbody>`
   }
 
   const topResults = [...results]
@@ -347,7 +390,14 @@ function renderUniversityMatchRows(results, isArabic) {
     })
     .slice(0, 5)
 
-  const rowsHtml = topResults.map((result) => {
+  const subjectScores = getLeadSubjectScores(submission)
+  const subjectSummary = Object.keys(subjectScores).length > 0
+    ? Object.entries(subjectScores)
+        .map(([key, value]) => `${key.toUpperCase()}: ${value}`)
+        .join(' | ')
+    : (isArabic ? 'لا توجد درجات' : 'No subject scores')
+
+  const rowsHtml = topResults.map((result, index) => {
     const universityName = result.cleanUniversityName || result.university || 'Unknown university'
     const programName = result.programName || result.program || 'General'
     const matchLabel = result.isMatch ? (isArabic ? 'مؤهل' : 'Eligible') : (isArabic ? 'غير مؤهل' : 'Not Eligible')
@@ -357,10 +407,12 @@ function renderUniversityMatchRows(results, isArabic) {
 
     return `
       <tr>
+        <td>${escapeHtml(String(index + 1))}</td>
         <td>${escapeHtml(universityName)}</td>
         <td>${escapeHtml(programName)}</td>
-        <td>${escapeHtml(result.country)}</td>
+        <td>${escapeHtml(result.country || '—')}</td>
         <td>${escapeHtml(String(result.matchPercentage ?? 0))}%</td>
+        <td>${escapeHtml(subjectSummary)}</td>
         <td>${escapeHtml(matchLabel)}</td>
         <td>${escapeHtml(missingText)}</td>
       </tr>`
@@ -446,18 +498,21 @@ export async function exportUniversityMatchPdf(submission, matchResults, languag
   </div>
   <h2>${escapeHtml(isArabic ? 'أفضل 5 نتائج مطابقة' : 'Top 5 Best Match Results')}</h2>
   ${buildAiRecommendationSection(submission, matchResults, isArabic)}
+  ${renderLeadSubjectSummary(submission, isArabic)}
   <table>
     <thead>
       <tr>
+        <th>${escapeHtml(isArabic ? 'الرتبة' : 'Rank')}</th>
         <th>${escapeHtml(isArabic ? 'اسم الجامعة' : 'University Name')}</th>
         <th>${escapeHtml(isArabic ? 'اسم البرنامج' : 'Program Name')}</th>
         <th>${escapeHtml(isArabic ? 'الدولة' : 'Country')}</th>
         <th>${escapeHtml(isArabic ? 'نسبة المطابقة' : 'Match %')}</th>
+        <th>${escapeHtml(isArabic ? 'درجات الطالب' : 'Student Scores')}</th>
         <th>${escapeHtml(isArabic ? 'الحالة' : 'Status')}</th>
         <th>${escapeHtml(isArabic ? 'المتطلبات المفقودة' : 'Missing Requirements')}</th>
       </tr>
     </thead>
-    ${renderUniversityMatchRows(matchResults, isArabic)}
+    ${renderUniversityMatchRows(matchResults, isArabic, submission)}
   </table>
   <p class="note">${escapeHtml(isArabic ? 'هذه الوثيقة تصدر بناء على نتائج المطابقة المتاحة حالياً ولا تغني عن مراجعة المستشار.' : 'This document is generated from the current match results and is not a substitute for consultant review.')}</p>
 </body>
