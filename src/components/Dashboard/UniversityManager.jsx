@@ -10,6 +10,7 @@ const emptyForm = {
   max_age_bachelor: '',
   max_age_master: '',
   max_gap_years: '',
+  deadline: '',
   level_1: '',
   level_2: '',
   m_t: '',
@@ -30,6 +31,7 @@ const formFields = [
   ['max_age_bachelor', 'Max age bachelor'],
   ['max_age_master', 'Max age master'],
   ['max_gap_years', 'Max gap years'],
+  ['deadline', 'Application deadline'],
   ['level_1', 'Level 1'],
   ['level_2', 'Level 2'],
   ['m_t', 'Math requirement'],
@@ -87,7 +89,12 @@ function UniversityManager({ onBack }) {
     setEditingId(row.id)
     setForm({
       ...emptyForm,
-      ...Object.fromEntries(Object.keys(emptyForm).map((key) => [key, row[key] ?? emptyForm[key]])),
+      ...Object.fromEntries(Object.keys(emptyForm).map((key) => [
+        key,
+        key === 'deadline'
+          ? row.deadline ?? row.application_deadline ?? emptyForm[key]
+          : row[key] ?? emptyForm[key],
+      ])),
     })
     setError('')
     setIsModalOpen(true)
@@ -167,23 +174,31 @@ function UniversityManager({ onBack }) {
           <table className="min-w-[850px] w-full border-collapse text-left text-sm">
             <thead className="sticky top-0 z-10 bg-slate-100">
               <tr>
-                {['University', 'Program', 'Minimum GPA', 'Minimum IELTS', 'Tuition Fee', 'Actions'].map((heading) => (
+                {['University', 'Program', 'Level', 'Deadline', 'Minimum GPA', 'Minimum IELTS', 'Tuition Fee', 'Math', 'Physics', 'Science', 'Languages', 'Economics', 'Geo-History', 'Actions'].map((heading) => (
                   <th key={heading} className="border-b border-slate-200 px-4 py-3 font-semibold text-slate-600">{heading}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan="6" className="px-4 py-10 text-center text-slate-500"><span className="inline-block h-5 w-5 animate-spin rounded-full border-2 border-sky-200 border-t-sky-600" /> <span className="ml-2">Loading universities...</span></td></tr>
+                <tr><td colSpan="14" className="px-4 py-10 text-center text-slate-500"><span className="inline-block h-5 w-5 animate-spin rounded-full border-2 border-sky-200 border-t-sky-600" /> <span className="ml-2">Loading universities...</span></td></tr>
               ) : rows.length === 0 ? (
-                <tr><td colSpan="6" className="px-4 py-10 text-center text-slate-500">No university criteria found.</td></tr>
+                <tr><td colSpan="14" className="px-4 py-10 text-center text-slate-500">No university criteria found.</td></tr>
               ) : rows.map((row) => (
                 <tr key={row.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50">
                   <td className="px-4 py-3 font-medium text-slate-800">{`${row.university || row.name || 'Unknown'}`.replace(/\/+.*?\/+/, '').trim()}</td>
                   <td className="px-4 py-3 text-slate-700">{getProgramName(row.university || row.name)}</td>
+                  <td className="px-4 py-3 text-slate-700">{[row.level_1, row.level_2].filter(Boolean).join(' / ') || '—'}</td>
+                  <td className="px-4 py-3 text-slate-700">{row.deadline ?? row.application_deadline ?? '—'}</td>
                   <td className="px-4 py-3 text-slate-700">{row.minimum_gpa ?? '—'}</td>
                   <td className="px-4 py-3 text-slate-700">{row.minimum_ielts ?? '—'}</td>
                   <td className="px-4 py-3 text-slate-700">{row.minimum_fee ?? '—'}</td>
+                  <td className="px-4 py-3 text-slate-700">{row.m_t ?? '—'}</td>
+                  <td className="px-4 py-3 text-slate-700">{row.phy ?? '—'}</td>
+                  <td className="px-4 py-3 text-slate-700">{row.se ?? '—'}</td>
+                  <td className="px-4 py-3 text-slate-700">{row.lng ?? '—'}</td>
+                  <td className="px-4 py-3 text-slate-700">{row.eco ?? '—'}</td>
+                  <td className="px-4 py-3 text-slate-700">{row.geo_his ?? '—'}</td>
                   <td className="px-4 py-3"><div className="flex gap-2"><button type="button" onClick={() => openEditModal(row)} className="rounded-lg border border-sky-200 px-3 py-1.5 text-xs font-semibold text-sky-700">Edit</button><button type="button" onClick={() => handleDelete(row)} className="rounded-lg border border-rose-200 px-3 py-1.5 text-xs font-semibold text-rose-700">Delete</button></div></td>
                 </tr>
               ))}
