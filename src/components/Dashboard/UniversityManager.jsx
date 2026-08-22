@@ -10,15 +10,16 @@ const emptyForm = {
   max_age_bachelor: '',
   max_age_master: '',
   max_gap_years: '',
-  deadline: '',
+  deadline_fall: '',
+  deadline_spring: '',
   level_1: '',
   level_2: '',
-  m_t: '',
+  'M.T': '',
   phy: '',
-  se: '',
-  lng: '',
-  eco: '',
-  geo_his: '',
+  Se: '',
+  Lng: '',
+  Eco: '',
+  'GEO-HIS': '',
   accepts_english_moi: false,
 }
 
@@ -31,15 +32,16 @@ const formFields = [
   ['max_age_bachelor', 'Max age bachelor'],
   ['max_age_master', 'Max age master'],
   ['max_gap_years', 'Max gap years'],
-  ['deadline', 'Application deadline'],
+  ['deadline_fall', 'Fall deadline'],
+  ['deadline_spring', 'Spring deadline'],
   ['level_1', 'Level 1'],
   ['level_2', 'Level 2'],
-  ['m_t', 'Math requirement'],
+  ['M.T', 'Math requirement'],
   ['phy', 'Physics requirement'],
-  ['se', 'Science requirement'],
-  ['lng', 'Languages requirement'],
-  ['eco', 'Economics requirement'],
-  ['geo_his', 'Geo-history requirement'],
+  ['Se', 'Science requirement'],
+  ['Lng', 'Languages requirement'],
+  ['Eco', 'Economics requirement'],
+  ['GEO-HIS', 'Geo-history requirement'],
 ]
 
 function getProgramName(university = '') {
@@ -91,9 +93,7 @@ function UniversityManager({ onBack }) {
       ...emptyForm,
       ...Object.fromEntries(Object.keys(emptyForm).map((key) => [
         key,
-        key === 'deadline'
-          ? row.deadline ?? row.application_deadline ?? emptyForm[key]
-          : row[key] ?? emptyForm[key],
+        row[key] ?? emptyForm[key],
       ])),
     })
     setError('')
@@ -189,16 +189,17 @@ function UniversityManager({ onBack }) {
                   <td className="px-4 py-3 font-medium text-slate-800">{`${row.university || row.name || 'Unknown'}`.replace(/\/+.*?\/+/, '').trim()}</td>
                   <td className="px-4 py-3 text-slate-700">{getProgramName(row.university || row.name)}</td>
                   <td className="px-4 py-3 text-slate-700">{[row.level_1, row.level_2].filter(Boolean).join(' / ') || '—'}</td>
-                  <td className="px-4 py-3 text-slate-700">{row.deadline ?? row.application_deadline ?? '—'}</td>
+                  <td className="px-4 py-3 text-slate-700">{row.deadline_fall ?? '—'}</td>
+                  <td className="px-4 py-3 text-slate-700">{row.deadline_spring ?? '—'}</td>
                   <td className="px-4 py-3 text-slate-700">{row.minimum_gpa ?? '—'}</td>
                   <td className="px-4 py-3 text-slate-700">{row.minimum_ielts ?? '—'}</td>
                   <td className="px-4 py-3 text-slate-700">{row.minimum_fee ?? '—'}</td>
-                  <td className="px-4 py-3 text-slate-700">{row.m_t ?? '—'}</td>
+                  <td className="px-4 py-3 text-slate-700">{row['M.T'] ?? '—'}</td>
                   <td className="px-4 py-3 text-slate-700">{row.phy ?? '—'}</td>
-                  <td className="px-4 py-3 text-slate-700">{row.se ?? '—'}</td>
-                  <td className="px-4 py-3 text-slate-700">{row.lng ?? '—'}</td>
-                  <td className="px-4 py-3 text-slate-700">{row.eco ?? '—'}</td>
-                  <td className="px-4 py-3 text-slate-700">{row.geo_his ?? '—'}</td>
+                  <td className="px-4 py-3 text-slate-700">{row.Se ?? '—'}</td>
+                  <td className="px-4 py-3 text-slate-700">{row.Lng ?? '—'}</td>
+                  <td className="px-4 py-3 text-slate-700">{row.Eco ?? '—'}</td>
+                  <td className="px-4 py-3 text-slate-700">{row['GEO-HIS'] ?? '—'}</td>
                   <td className="px-4 py-3"><div className="flex gap-2"><button type="button" onClick={() => openEditModal(row)} className="rounded-lg border border-sky-200 px-3 py-1.5 text-xs font-semibold text-sky-700">Edit</button><button type="button" onClick={() => handleDelete(row)} className="rounded-lg border border-rose-200 px-3 py-1.5 text-xs font-semibold text-rose-700">Delete</button></div></td>
                 </tr>
               ))}

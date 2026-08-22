@@ -87,7 +87,7 @@ serve(async (req: Request) => {
 
     if (supabaseUrl && supabaseKey) {
       try {
-        const criteriaUrl = `${supabaseUrl}/rest/v1/university_criteria?select=country,university,minimum_gpa,minimum_ielts,minimum_fee,level_1,level_2,m_t,phy,se,lng,eco,geo_his&order=country.asc&limit=120`
+        const criteriaUrl = `${supabaseUrl}/rest/v1/university_criteria?select=*&order=country.asc&limit=120`
         const criteriaResponse = await fetch(criteriaUrl, {
           headers: {
             'apikey': supabaseKey,
@@ -110,7 +110,7 @@ serve(async (req: Request) => {
             const majorPart = universityName.match(/\/+(.+?)\/+/) || universityName.match(/\/(.+?)\//) || null
             const programName = majorPart ? majorPart[1].trim() : 'General'
             const cleanUniversity = universityName.replace(/\/+.*?\/+/, '').trim() || universityName
-            return `- ${cleanUniversity} | Program: ${programName} | Country: ${row?.country || 'Unknown'} | GPA ${row?.minimum_gpa || 'N/A'} | IELTS ${row?.minimum_ielts || 'N/A'} | Fee ${row?.minimum_fee || 'N/A'} | Level: ${row?.level_1 || 'N/A'}`
+            return `- ${cleanUniversity} | Program: ${programName} | Country: ${row?.country || 'Unknown'} | GPA ${row?.minimum_gpa || 'N/A'} | IELTS ${row?.minimum_ielts || 'N/A'} | Fee ${row?.minimum_fee || 'N/A'} | Level: ${row?.level_1 || 'N/A'}${row?.level_2 ? ` / ${row.level_2}` : ''} | Fall deadline: ${row?.deadline_fall || 'N/A'} | Spring deadline: ${row?.deadline_spring || 'N/A'} | Math ${row?.['M.T'] || 'N/A'} | Physics ${row?.phy || 'N/A'} | Science ${row?.Se || 'N/A'} | Languages ${row?.Lng || 'N/A'} | Economics ${row?.Eco || 'N/A'} | Geo-History ${row?.['GEO-HIS'] || 'N/A'}`
           }).join('\n')
         }
       } catch (error) {

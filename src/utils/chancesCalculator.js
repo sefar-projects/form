@@ -417,12 +417,12 @@ export function compareWithAllUniversities(normalizedLead, universityRules = [],
   }
 
   const leadSubjects = {
-    m_t: parseScoreValue(subjectScoresRaw.m_t),
+    m_t: parseScoreValue(subjectScoresRaw.m_t ?? subjectScoresRaw['M.T']),
     phy: parseScoreValue(subjectScoresRaw.phy),
-    se: parseScoreValue(subjectScoresRaw.se),
-    lng: parseScoreValue(subjectScoresRaw.lng),
-    eco: parseScoreValue(subjectScoresRaw.eco),
-    geo_his: parseScoreValue(subjectScoresRaw.geo_his),
+    se: parseScoreValue(subjectScoresRaw.se ?? subjectScoresRaw.Se),
+    lng: parseScoreValue(subjectScoresRaw.lng ?? subjectScoresRaw.Lng),
+    eco: parseScoreValue(subjectScoresRaw.eco ?? subjectScoresRaw.Eco),
+    geo_his: parseScoreValue(subjectScoresRaw.geo_his ?? subjectScoresRaw['GEO-HIS']),
   }
 
   const normalizeMajorText = (value) => `${value || ''}`
@@ -490,12 +490,12 @@ export function compareWithAllUniversities(normalizedLead, universityRules = [],
     })
 
     const subjectRuleMap = [
-      { key: 'm_t', label: 'Math score', leadValue: leadSubjects.m_t },
+      { key: 'M.T', label: 'Math score', leadValue: leadSubjects.m_t },
       { key: 'phy', label: 'Physics score', leadValue: leadSubjects.phy },
-      { key: 'se', label: 'Science score', leadValue: leadSubjects.se },
-      { key: 'lng', label: 'Languages score', leadValue: leadSubjects.lng },
-      { key: 'eco', label: 'Economics score', leadValue: leadSubjects.eco },
-      { key: 'geo_his', label: 'Geo-History score', leadValue: leadSubjects.geo_his },
+      { key: 'Se', label: 'Science score', leadValue: leadSubjects.se },
+      { key: 'Lng', label: 'Languages score', leadValue: leadSubjects.lng },
+      { key: 'Eco', label: 'Economics score', leadValue: leadSubjects.eco },
+      { key: 'GEO-HIS', label: 'Geo-History score', leadValue: leadSubjects.geo_his },
     ]
 
     subjectRuleMap.forEach(({ key, label, leadValue }) => {
