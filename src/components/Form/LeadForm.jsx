@@ -12,6 +12,7 @@ import StepThree from './StepThree'
 import StepFour from './StepFour.jsx'
 import AdminLogin from '../Admin/AdminLogin'
 import DashboardPanel from '../Dashboard/DashboardPanel'
+import UniversityManager from '../Dashboard/UniversityManager'
 
 const initialValues = {
   firstName: '',
@@ -65,6 +66,7 @@ function LeadForm() {
   const [showAccessCode, setShowAccessCode] = useState(true)
   const [showAdmin, setShowAdmin] = useState(false)
   const [showDashboard, setShowDashboard] = useState(false)
+  const [showUniversityManager, setShowUniversityManager] = useState(false)
   const [accessCode, setAccessCode] = useState('')
   const [accessCodeError, setAccessCodeError] = useState('')
   const [step, setStep] = useState(1)
@@ -475,7 +477,7 @@ function LeadForm() {
           </div>
 
           <div className="flex items-center gap-2">
-            {!showDashboard && !showAdmin ? (
+            {!showDashboard && !showAdmin && !showUniversityManager ? (
               <button
                 type="button"
                 onClick={() => setShowAdmin(true)}
@@ -490,7 +492,7 @@ function LeadForm() {
               </button>
             ) : null}
 
-            {!showIntro && !showAccessCode && !showDashboard ? (
+            {!showIntro && !showAccessCode && !showDashboard && !showUniversityManager ? (
               <div className="rounded-full border border-sky-200 bg-sky-50 px-3 py-2 text-sm font-medium text-sky-700">
                 {t.stepLabel} {step} / 4
               </div>
@@ -544,11 +546,23 @@ function LeadForm() {
           <DashboardPanel
             language={language}
             onBack={() => setShowDashboard(false)}
+            onManageUniversities={() => {
+              setShowDashboard(false)
+              setShowUniversityManager(true)
+            }}
             onLogout={() => {
               setShowDashboard(false)
               setShowAdmin(false)
+              setShowUniversityManager(false)
             }}
           />
+        ) : null}
+
+        {!isCompleted && showUniversityManager ? (
+          <UniversityManager onBack={() => {
+            setShowUniversityManager(false)
+            setShowDashboard(true)
+          }} />
         ) : null}
 
         {!isCompleted && showIntro ? (
@@ -590,7 +604,7 @@ function LeadForm() {
           </div>
         ) : null}
 
-        {!isCompleted && !showIntro && showAccessCode && !showAdmin && !showDashboard ? (
+        {!isCompleted && !showIntro && showAccessCode && !showAdmin && !showDashboard && !showUniversityManager ? (
           <form onSubmit={handleAccessCodeSubmit} className="rounded-[1.5rem] border border-sky-100 bg-white p-6">
             <h3 className="text-2xl font-semibold text-slate-800">{t.accessCodeTitle}</h3>
             <p className="mt-2 text-sm text-slate-500">{t.accessCodeHint}</p>

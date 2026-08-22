@@ -73,7 +73,7 @@ function getLeadDisplayName(lead) {
   return fullName || lead.email || lead.access_code || 'Unknown lead'
 }
 
-function DashboardPanel({ language = 'en', onBack, onLogout }) {
+function DashboardPanel({ language = 'en', onBack, onLogout, onManageUniversities }) {
   const t = translations[language] || translations.en
   const [customerName, setCustomerName] = useState('')
   const [codes, setCodes] = useState([])
@@ -158,16 +158,6 @@ function DashboardPanel({ language = 'en', onBack, onLogout }) {
     const programName = recommendation.programName || recommendation.program || ''
 
     return programName ? `${universityName} / ${programName}` : universityName
-  }
-
-  const getAiRecommendationForRow = (row) => {
-    const countrySpecificData = parseObjectValue(row.country_specific_data)
-    return {
-      best_university_en: countrySpecificData?.best_match_university || countrySpecificData?._meta?.studyPath?.best_university_en || countrySpecificData?.best_university_en || null,
-      best_program_en: countrySpecificData?.best_match_program || countrySpecificData?._meta?.studyPath?.best_program_en || countrySpecificData?.best_program_en || null,
-      why_best_university_en: countrySpecificData?.ai_match_rationale_en || countrySpecificData?._meta?.studyPath?.ai_match_rationale_en || countrySpecificData?._meta?.studyPath?.why_best_university_en || countrySpecificData?.why_best_university_en || null,
-      general_info_en: countrySpecificData?._meta?.studyPath?.general_info_en || countrySpecificData?.general_info_en || null,
-    }
   }
 
   const getRecommendedMajorForRow = (row, result = null) => {
@@ -461,6 +451,9 @@ function DashboardPanel({ language = 'en', onBack, onLogout }) {
             <p className="mt-1 text-sm text-slate-500">{t.dashboardSubtitle}</p>
           </div>
           <div className="flex items-center gap-2">
+            <button type="button" onClick={onManageUniversities} className="rounded-full border border-sky-200 px-4 py-2 text-sm font-semibold text-sky-700">
+              University Criteria
+            </button>
             <button type="button" onClick={exportPdf} className="rounded-full border border-sky-200 px-4 py-2 text-sm font-semibold text-sky-700">
               {t.exportPdfButton}
             </button>
