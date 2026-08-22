@@ -136,38 +136,6 @@ function renderAiEvaluationSection(submission, isArabic) {
     <div class="ai-box">${escapeHtml(details.join('\n'))}</div>`
 }
 
-function renderRecommendationSection(countryData, isArabic) {
-  if (!countryData || typeof countryData !== 'object') return ''
-
-  const recommendation = parseObjectValue(countryData?._meta?.recommendation)
-  if (!recommendation || Object.keys(recommendation).length === 0) {
-    return ''
-  }
-
-  const reasonsList = Array.isArray(recommendation.reasons) && recommendation.reasons.length > 0
-    ? recommendation.reasons.map((r) => `<li>${escapeHtml(String(r))}</li>`).join('')
-    : `<li>${escapeHtml(isArabic ? 'لا توجد أسباب محددة مقدمة' : 'No specific reasons provided')}</li>`
-
-  return `
-    <h2>${escapeHtml(isArabic ? 'الجامعة والدولة الموصى بها' : 'Best University & Country Suggestion')}</h2>
-    <table>
-      <tbody>
-        <tr>
-          <td style="font-weight: 600; width: 35%;">${escapeHtml(isArabic ? 'الجامعة الموصى بها' : 'Suggested Option')}</td>
-          <td><strong>${escapeHtml(pickFirstValue(recommendation.country, recommendation.countryName) || '')} - ${escapeHtml(pickFirstValue(recommendation.university, recommendation.universityName) || '')}</strong></td>
-        </tr>
-        <tr>
-          <td style="font-weight: 600;">${escapeHtml(isArabic ? 'درجة التوصية' : 'Recommendation Score')}</td>
-          <td><span class="badge">${escapeHtml(String(recommendation.recommendation_score ?? recommendation.recommendationScore ?? 0))} / 10</span></td>
-        </tr>
-        <tr>
-          <td style="font-weight: 600;">${escapeHtml(isArabic ? 'سبب اختيار هذه الجامعة' : 'Why this score / reasons')}</td>
-          <td><ul style="margin: 0; padding-inline-start: 18px;">${reasonsList}</ul></td>
-        </tr>
-      </tbody>
-    </table>`
-}
-
 function humanizeLabel(key) {
   return key
     .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
@@ -703,7 +671,6 @@ export async function exportSubmissionPdf(submission, language = 'en') {
   ].join('')
 
   const aiEvaluationSectionHtml = renderAiEvaluationSection(submission, isArabic)
-  const recommendationSectionHtml = renderRecommendationSection(countryData, isArabic)
   const countryRowsHtml = renderCountryTableRows(countryData)
   const chanceRowsHtml = renderChanceRows(parseObjectValue(submission.agency_internal_score), translations[language] || translations.en, isArabic)
 
@@ -732,7 +699,6 @@ export async function exportSubmissionPdf(submission, language = 'en') {
     </div>
     ${sectionTablesHtml}
     ${aiEvaluationSectionHtml}
-    ${recommendationSectionHtml}
     <h2>${escapeHtml(isArabic ? 'جدول بيانات الدول' : 'Country-specific details')}</h2>
     <table>${countryRowsHtml}</table>
     <h2>${escapeHtml(isArabic ? 'نتائج نسبة القبول مع التفاصيل' : 'Chance calculator results')}</h2>
