@@ -6,6 +6,7 @@ import { translations } from '../../i18n/translations'
 import { calculateChances, compareWithAllUniversities, suggestBestUniversity } from '../../utils/chancesCalculator'
 import { normalizeLeadData } from '../../utils/normalizeLead'
 import { exportSubmissionPdf, exportClientPdf, exportUniversityMatchPdf } from '../../utils/exportPdf'
+import UniversityManager from './UniversityManager'
 
 function parseObjectValue(value) {
   if (!value) return {}
@@ -44,14 +45,7 @@ function buildLeadDataFromSubmission(row) {
     studied_in_english_before: row.studied_in_english_before ?? academicMeta.studiedInEnglishBefore,
     ai_recommended_major: row.ai_recommended_major || row.recommended_major_en || null,
     specialization1: academicMeta.specialization1 || countrySpecificData?.poland?.specialization1 || row.specialization1 || '',
-    subject_scores: {
-      m_t: subjectScores.m_t,
-      phy: subjectScores.phy,
-      se: subjectScores.se,
-      lng: subjectScores.lng,
-      eco: subjectScores.eco,
-      geo_his: subjectScores.geo_his,
-    },
+    subject_scores: subjectScores,
     country_specific_data: countrySpecificData,
   }
 }
@@ -90,6 +84,7 @@ function DashboardPanel({ language = 'en', onBack, onLogout }) {
   const [selectedSubmissionId, setSelectedSubmissionId] = useState(null)
   const [matchResults, setMatchResults] = useState({})
   const [matchingLeadId, setMatchingLeadId] = useState(null)
+  const [showUniversityManager, setShowUniversityManager] = useState(false)
 
   const loadData = async () => {
     const rows = await getAccessCodes()
@@ -121,7 +116,8 @@ function DashboardPanel({ language = 'en', onBack, onLogout }) {
 
     setLoading(true)
     try {
-      const created = await createAccessCode(customerName.trim(), newCodeTier)
+      const selectedTier = newCodeTier === 'free' ? 'free' : 'full'
+      const created = await createAccessCode(customerName.trim(), selectedTier)
       setMessage(`${t.generatedCodeLabel}: ${created.code}`)
       setCustomerName('')
       await loadData()
@@ -468,6 +464,10 @@ function DashboardPanel({ language = 'en', onBack, onLogout }) {
 
   const usedSubmissions = useMemo(() => submissions.filter((row) => row.access_code), [submissions])
 
+  if (showUniversityManager) {
+    return <UniversityManager onBack={() => setShowUniversityManager(false)} />
+  }
+
   return (
     <div className="space-y-6">
       <div className="rounded-3xl border border-sky-100 bg-white p-6 shadow-sm">
@@ -477,6 +477,13 @@ function DashboardPanel({ language = 'en', onBack, onLogout }) {
             <p className="mt-1 text-sm text-slate-500">{t.dashboardSubtitle}</p>
           </div>
           <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setShowUniversityManager(true)}
+              className="rounded-full border border-sky-200 px-4 py-2 text-sm font-semibold text-sky-700"
+            >
+              Manage university criteria
+            </button>
             <button type="button" onClick={exportPdf} className="rounded-full border border-sky-200 px-4 py-2 text-sm font-semibold text-sky-700">
               {t.exportPdfButton}
             </button>
@@ -498,10 +505,11 @@ function DashboardPanel({ language = 'en', onBack, onLogout }) {
           />
           <select
             value={newCodeTier}
-            onChange={(event) => setNewCodeTier(event.target.value)}
+            onChange={(event) => setNewCodeTier(event.target.value === 'free' ? 'free' : 'full')}
             className="rounded-full border border-sky-100 bg-sky-50 px-4 py-3 text-sm text-slate-700"
+            aria-label="Access code tier"
           >
-            <option value="full">Full (paid AI evaluation)</option>
+            <option value="full">Paid / Full (AI evaluation)</option>
             <option value="free">Free (local match only)</option>
           </select>
           <button type="submit" disabled={loading} className="rounded-full bg-sky-600 px-5 py-3 text-sm font-semibold text-white disabled:opacity-70">
@@ -528,7 +536,11 @@ function DashboardPanel({ language = 'en', onBack, onLogout }) {
                   </button>
                 </div>
                 <div className="mt-2 flex items-center gap-3 text-xs text-slate-500">
-                  <span>{row.used ? t.usedLabel : t.activeLabel}</span>
+                  <span>
+                    {row.tier === 'free'
+                      ? (language === 'ar' ? 'قابل لإعادة الاستخدام' : 'Reusable')
+                      : row.used ? t.usedLabel : t.activeLabel}
+                  </span>
                   <span>•</span>
                   <span>{row.tier === 'free' ? 'Free tier' : 'Full tier'}</span>
                   <span>•</span>

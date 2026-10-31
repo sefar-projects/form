@@ -174,16 +174,16 @@ function UniversityManager({ onBack }) {
           <table className="min-w-[850px] w-full border-collapse text-left text-sm">
             <thead className="sticky top-0 z-10 bg-slate-100">
               <tr>
-                {['University', 'Program', 'Level', 'Deadline', 'Minimum GPA', 'Minimum IELTS', 'Tuition Fee', 'Math', 'Physics', 'Science', 'Languages', 'Economics', 'Geo-History', 'Actions'].map((heading) => (
+                {['University', 'Program', 'Level', 'Fall deadline', 'Spring deadline', 'Minimum GPA', 'Minimum IELTS', 'Tuition Fee', 'Math', 'Physics', 'Science', 'Languages', 'Economics', 'Geo-History', 'Actions'].map((heading) => (
                   <th key={heading} className="border-b border-slate-200 px-4 py-3 font-semibold text-slate-600">{heading}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan="14" className="px-4 py-10 text-center text-slate-500"><span className="inline-block h-5 w-5 animate-spin rounded-full border-2 border-sky-200 border-t-sky-600" /> <span className="ml-2">Loading universities...</span></td></tr>
+                <tr><td colSpan="15" className="px-4 py-10 text-center text-slate-500"><span className="inline-block h-5 w-5 animate-spin rounded-full border-2 border-sky-200 border-t-sky-600" /> <span className="ml-2">Loading universities...</span></td></tr>
               ) : rows.length === 0 ? (
-                <tr><td colSpan="14" className="px-4 py-10 text-center text-slate-500">No university criteria found.</td></tr>
+                <tr><td colSpan="15" className="px-4 py-10 text-center text-slate-500">No university criteria found.</td></tr>
               ) : rows.map((row) => (
                 <tr key={row.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50">
                   <td className="px-4 py-3 font-medium text-slate-800">{`${row.university || row.name || 'Unknown'}`.replace(/\/+.*?\/+/, '').trim()}</td>

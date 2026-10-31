@@ -3,6 +3,20 @@ import { countriesConfig } from '../../config/countriesConfig'
 const countryLevelOptions = ['Bachelor', 'Master', 'PhD']
 const universityTypeOptions = ['Public', 'Private', 'No preference']
 const housingOptions = ['University housing', 'Private housing', 'No preference']
+const subjectOptions = [
+  ['Math', 'subjectMath'],
+  ['Physics', 'subjectPhysics'],
+  ['Chemistry', 'subjectChemistry'],
+  ['Biology/Science', 'subjectBiologyScience'],
+  ['Process Engineering', 'subjectProcessEngineering'],
+  ['Literature', 'subjectLiterature'],
+  ['Foreign Languages', 'subjectForeignLanguages'],
+  ['Philosophy', 'subjectPhilosophy'],
+  ['Economics', 'subjectEconomics'],
+  ['Geo-History', 'subjectGeoHistory'],
+  ['Other', 'subjectOther'],
+]
+
 const countryCardClasses = {
   italy: 'border-amber-200 bg-amber-50/60',
   poland: 'border-rose-200 bg-rose-50/60',
@@ -12,7 +26,7 @@ const countryCardClasses = {
   uk: 'border-blue-200 bg-blue-50/60',
 }
 
-function StepThree({ values, onChange, onDynamicChange, onBack, onNext, error, errors = {}, t }) {
+function StepThree({ values, onChange, subjects, onSubjectsChange, onDynamicChange, onBack, onNext, error, errors = {}, t }) {
   const selectedCountries = values.selectedCountries || []
   const needsGapExplanation = values.gapYears === 'Two years or more'
   const needsCertificateDetails = values.languageCertificateType && values.languageCertificateType !== 'None'
@@ -168,97 +182,65 @@ function StepThree({ values, onChange, onDynamicChange, onBack, onNext, error, e
 
         <div className="mt-4 rounded-2xl border border-sky-100 bg-white p-5">
           <h4 className="text-md font-semibold text-slate-800">{t.academicSubjectScoresTitle}</h4>
-          <p className="mt-2 text-sm text-slate-600">Optional — fill these if you have specific subject grades out of 20.</p>
-          <div className="mt-4 grid gap-4 md:grid-cols-2">
-            <label className="block text-sm font-medium text-slate-700">
-              <span className="mb-2 block">{t.mathScoreLabel}</span>
-              <input
-                type="number"
-                min="0"
-                max="20"
-                step="0.1"
-                value={values.mathScore}
-                onChange={(event) => onChange('mathScore', event.target.value)}
-                className="w-full rounded-xl border bg-white px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-sky-500 border-sky-100"
-                placeholder="14.0"
-              />
-            </label>
-
-            <label className="block text-sm font-medium text-slate-700">
-              <span className="mb-2 block">{t.physicsScoreLabel}</span>
-              <input
-                type="number"
-                min="0"
-                max="20"
-                step="0.1"
-                value={values.physicsScore}
-                onChange={(event) => onChange('physicsScore', event.target.value)}
-                className="w-full rounded-xl border bg-white px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-sky-500 border-sky-100"
-                placeholder="14.0"
-              />
-            </label>
+          <p className="mt-2 text-sm text-slate-600">{t.subjectScoresHelp}</p>
+          <div className="mt-4 space-y-3">
+            {subjects.map((subject, index) => (
+              <div key={index} className="grid gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3 sm:grid-cols-[1fr_180px_auto] sm:items-end">
+                <label className="block text-sm font-medium text-slate-700">
+                  <span className="mb-2 block">{t.subjectNameLabel}</span>
+                  <select
+                    value={subject.name}
+                    onChange={(event) => onSubjectsChange((current) => current.map((item, itemIndex) => (
+                      itemIndex === index ? { ...item, name: event.target.value } : item
+                    )))}
+                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700 outline-none transition focus:border-sky-500"
+                  >
+                    <option value="">{t.selectPlaceholder}</option>
+                    {subjectOptions.map(([value, translationKey]) => (
+                      <option
+                        key={value}
+                        value={value}
+                        disabled={subjects.some((item, itemIndex) => itemIndex !== index && item.name === value)}
+                      >
+                        {t[translationKey]}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="block text-sm font-medium text-slate-700">
+                  <span className="mb-2 block">{t.subjectScoreLabel}</span>
+                  <input
+                    type="number"
+                    min="0"
+                    max="20"
+                    step="0.1"
+                    value={subject.score}
+                    onChange={(event) => onSubjectsChange((current) => current.map((item, itemIndex) => (
+                      itemIndex === index ? { ...item, score: event.target.value } : item
+                    )))}
+                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700 outline-none transition focus:border-sky-500"
+                    placeholder="14.0"
+                  />
+                </label>
+                <button
+                  type="button"
+                  onClick={() => onSubjectsChange((current) => current.filter((_, itemIndex) => itemIndex !== index))}
+                  disabled={subjects.length === 1}
+                  aria-label={t.removeSubject}
+                  className="rounded-lg px-3 py-2.5 text-sm font-semibold text-rose-600 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  🗑️
+                </button>
+              </div>
+            ))}
           </div>
-
-          <div className="mt-4 grid gap-4 md:grid-cols-2">
-            <label className="block text-sm font-medium text-slate-700">
-              <span className="mb-2 block">{t.scienceScoreLabel}</span>
-              <input
-                type="number"
-                min="0"
-                max="20"
-                step="0.1"
-                value={values.scienceScore}
-                onChange={(event) => onChange('scienceScore', event.target.value)}
-                className="w-full rounded-xl border bg-white px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-sky-500 border-sky-100"
-                placeholder="14.0"
-              />
-            </label>
-
-            <label className="block text-sm font-medium text-slate-700">
-              <span className="mb-2 block">{t.languagesScoreLabel}</span>
-              <input
-                type="number"
-                min="0"
-                max="20"
-                step="0.1"
-                value={values.languagesScore}
-                onChange={(event) => onChange('languagesScore', event.target.value)}
-                className="w-full rounded-xl border bg-white px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-sky-500 border-sky-100"
-                placeholder="14.0"
-              />
-              <p className="mt-2 text-xs text-slate-500">{t.languagesScoreNote}</p>
-            </label>
-          </div>
-
-          <div className="mt-4 grid gap-4 md:grid-cols-2">
-            <label className="block text-sm font-medium text-slate-700">
-              <span className="mb-2 block">{t.economicsScoreLabel}</span>
-              <input
-                type="number"
-                min="0"
-                max="20"
-                step="0.1"
-                value={values.economicsScore}
-                onChange={(event) => onChange('economicsScore', event.target.value)}
-                className="w-full rounded-xl border bg-white px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-sky-500 border-sky-100"
-                placeholder="14.0"
-              />
-            </label>
-
-            <label className="block text-sm font-medium text-slate-700">
-              <span className="mb-2 block">{t.geoHistoryScoreLabel}</span>
-              <input
-                type="number"
-                min="0"
-                max="20"
-                step="0.1"
-                value={values.historyGeoScore}
-                onChange={(event) => onChange('historyGeoScore', event.target.value)}
-                className="w-full rounded-xl border bg-white px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-sky-500 border-sky-100"
-                placeholder="14.0"
-              />
-            </label>
-          </div>
+          <button
+            type="button"
+            onClick={() => onSubjectsChange((current) => [...current, { name: '', score: '' }])}
+            className="mt-4 rounded-lg border border-sky-200 bg-sky-50 px-4 py-2.5 text-sm font-semibold text-sky-700 transition hover:bg-sky-100"
+          >
+            + {t.addSubject}
+          </button>
         </div>
 
         <div className="mt-4 grid gap-4 md:grid-cols-2">

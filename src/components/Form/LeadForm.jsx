@@ -6,6 +6,7 @@ import { calculateChances, compareWithAllUniversities, suggestBestUniversity } f
 import { normalizeLeadData } from '../../utils/normalizeLead'
 import { translations } from '../../i18n/translations'
 import logo from '../../assets/logo.png'
+import { exportPreliminaryResultsPdf } from '../../utils/exportPdf'
 import LandingPage from './LandingPage'
 import StepOne from './StepOne'
 import StepTwo from './StepTwo'
@@ -34,12 +35,6 @@ const initialValues = {
   lastDegreeDate: '',
   gapYears: '',
   gapYearsExplanation: '',
-  mathScore: '',
-  physicsScore: '',
-  scienceScore: '',
-  languagesScore: '',
-  economicsScore: '',
-  historyGeoScore: '',
   englishLevel: '',
   languageCertificateType: '',
   languageCertificateName: '',
@@ -62,6 +57,7 @@ const initialValues = {
 
 function LeadForm() {
   const [language, setLanguage] = useState('en')
+  const [subjects, setSubjects] = useState([{ name: '', score: '' }])
   const [showIntro, setShowIntro] = useState(true)
   const [showAccessCode, setShowAccessCode] = useState(true)
   const [showAdmin, setShowAdmin] = useState(false)
@@ -77,6 +73,9 @@ function LeadForm() {
   const [successMessage, setSuccessMessage] = useState('')
   const [isCompleted, setIsCompleted] = useState(false)
   const [universityRules, setUniversityRules] = useState([])
+  const [submittedLeadData, setSubmittedLeadData] = useState(null)
+  const [fullMatchList, setFullMatchList] = useState([])
+  const [bestMatch, setBestMatch] = useState(null)
 
   const t = translations[language] || translations.en
   const normalizedAccessCode = `${accessCode}`.trim().toUpperCase().replaceAll(/\s+/g, '')
@@ -316,12 +315,7 @@ function LeadForm() {
             lastDegreeDate: values.lastDegreeDate,
             gapYears: values.gapYears,
             gapYearsExplanation: values.gapYearsExplanation,
-            mathScore: values.mathScore,
-            physicsScore: values.physicsScore,
-            scienceScore: values.scienceScore,
-            languagesScore: values.languagesScore,
-            economicsScore: values.economicsScore,
-            historyGeoScore: values.historyGeoScore,
+            subject_scores: {},
             languageCertificateType: values.languageCertificateType,
             languageCertificateName: values.languageCertificateName,
             languageCertificateScore: values.languageCertificateScore,
@@ -346,6 +340,13 @@ function LeadForm() {
       const targetDegree = `${firstCountryAnswers.desiredLevel || values.degreeType || ''} ${firstCountryAnswers.specialization1 || values.studyField || ''}`.trim()
       const previousDegree = `${values.degreeType || 'Previous degree'} in ${values.studyField || 'Unknown field'}`
 
+      const subjectScores = Object.fromEntries(
+        subjects
+          .filter((subject) => subject.name && subject.score !== '')
+          .map((subject) => [subject.name, Number(subject.score)]),
+      )
+      countrySpecificData._meta.academic.subject_scores = subjectScores
+
       const rawLeadData = {
         gpa: values.finalMark,
         english_level: englishLevelForScoring,
@@ -355,20 +356,17 @@ function LeadForm() {
         date_of_birth: values.dob,
         last_degree_date: values.lastDegreeDate,
         studied_in_english_before: values.studiedInEnglishBefore,
-        subject_scores: {
-          m_t: values.mathScore,
-          phy: values.physicsScore,
-          se: values.scienceScore,
-          lng: values.languagesScore,
-          eco: values.economicsScore,
-          geo_his: values.historyGeoScore,
-        },
+        subject_scores: subjectScores,
         country_specific_data: countrySpecificData,
         previousDegree,
         targetDegree,
       }
 
       const normalizedLeadInput = normalizeLeadData(rawLeadData)
+      const fullMatchList = compareWithAllUniversities(normalizedLeadInput, universityRules)
+      const preliminaryBestMatch = suggestBestUniversity(fullMatchList, normalizedLeadInput)
+      setFullMatchList(fullMatchList)
+      setBestMatch(preliminaryBestMatch)
 
       const aiEvaluationData = accessCodeTier === 'free'
         ? {
@@ -388,25 +386,25 @@ function LeadForm() {
         score: aiEvaluationData.relevance_score,
       }
 
-      countrySpecificData._meta.academic.subject_scores = {
-        m_t: values.mathScore,
-        phy: values.physicsScore,
-        se: values.scienceScore,
-        lng: values.languagesScore,
-        eco: values.economicsScore,
-        geo_his: values.historyGeoScore,
-      }
-
       const scorePayload = calculateChances(
         normalizedLeadInput,
         universityRules,
         aiEvaluationData.relevance_score,
       )
 
-      const universityMatches = compareWithAllUniversities(normalizedLeadInput, universityRules)
-      const recommendation = suggestBestUniversity(universityMatches, normalizedLeadInput)
+      const recommendation = preliminaryBestMatch
 
       countrySpecificData._meta.recommendation = recommendation
+      const reportLeadData = {
+        ...rawLeadData,
+        first_name: values.firstName,
+        last_name: values.lastName,
+        name: `${values.firstName} ${values.lastName}`.trim(),
+        tier: accessCodeTier,
+        country_specific_data: countrySpecificData,
+        access_code: normalizedAccessCode,
+        subject_scores: rawLeadData.subject_scores,
+      }
 
       await submitLead({
         firstName: values.firstName,
@@ -438,6 +436,7 @@ function LeadForm() {
 
       setSuccessMessage(t.submissionSuccess)
       setSubmissionStatus('')
+      setSubmittedLeadData(reportLeadData)
       setValues(initialValues)
       setIsCompleted(true)
       setStepErrors({})
@@ -456,7 +455,7 @@ function LeadForm() {
     >
       <div
         className={
-          showLandingPage
+          showLandingPage || isCompleted
             ? 'w-full'
             : 'w-full rounded-[2rem] border border-sky-100 bg-white/95 p-6 shadow-[0_20px_80px_-20px_rgba(14,165,233,0.35)] backdrop-blur sm:p-8'
         }
@@ -497,7 +496,7 @@ function LeadForm() {
           </div>
         ) : null}
 
-        {successMessage ? (
+        {successMessage && !isCompleted ? (
           <div className="mb-6 rounded-2xl border border-emerald-500/30 bg-emerald-50 p-4 text-sm text-emerald-700">
             {successMessage}
           </div>
@@ -510,9 +509,58 @@ function LeadForm() {
         ) : null}
 
         {isCompleted ? (
-          <div className="rounded-[1.5rem] border border-emerald-200 bg-emerald-50 p-8 text-center">
-            <h3 className="text-2xl font-semibold text-emerald-800">{t.completionTitle}</h3>
-            <p className="mt-3 text-base text-emerald-700">{t.completionMessage}</p>
+          <div className="rounded-[1.5rem] border border-sky-200 bg-white p-6 sm:p-8">
+            <h3 className="text-2xl font-semibold text-slate-900">
+              {language === 'ar' ? 'نتائجك الأولية' : 'Your Preliminary Results'}
+            </h3>
+            {bestMatch ? (
+              <p className="mt-4 text-lg font-semibold text-slate-800">
+                {language === 'ar' ? 'أفضل تطابق' : 'Top Match'}:{' '}
+                {bestMatch.cleanUniversityName || bestMatch.university || bestMatch.original_university_string || '—'}
+                {' - '}
+                {bestMatch.matchPercentage ?? bestMatch.recommendation_score ?? '—'}%
+              </p>
+            ) : (
+              <p className="mt-4 text-sm text-slate-600">
+                {language === 'ar' ? 'لم يتم العثور على نتائج مطابقة.' : 'No university matches were found.'}
+              </p>
+            )}
+
+            {accessCodeTier === 'free' ? (
+              <div className="my-6 rounded-lg border border-slate-800 bg-slate-900 p-6 text-center text-white">
+                <h4 className="mb-2 text-xl font-bold">🔒 Unlock Your Full AI Study Path &amp; Expert Consultation</h4>
+                <p className="mb-4 text-sm text-slate-300">
+                  You are viewing preliminary eligibility results. To unlock your full AI academic profile, tailored roadmap, and complete university application review, start your procedure today for 10,000 DZD.
+                </p>
+                <div className="inline-block rounded bg-slate-800 px-4 py-3 text-sm font-medium text-white">
+                  📞 Contact Sefar Travel Agency: +213 562-884-864
+                </div>
+              </div>
+            ) : null}
+
+            {submittedLeadData && accessCodeTier === 'free' ? (
+              <button
+                type="button"
+                onClick={() => exportPreliminaryResultsPdf(
+                  submittedLeadData,
+                  fullMatchList,
+                  bestMatch,
+                  accessCodeTier,
+                  language,
+                )}
+                className="w-full rounded-lg bg-blue-700 px-5 py-3 text-sm font-semibold text-white transition hover:bg-blue-600 sm:w-auto"
+              >
+                {language === 'ar' ? 'تنزيل تقرير PDF' : 'Download PDF'}
+              </button>
+            ) : null}
+            {accessCodeTier !== 'free' ? (
+              <p className="mt-4 text-sm text-slate-600">
+                {language === 'ar'
+                  ? 'سترسل الوكالة تقريرك الكامل إليك.'
+                  : 'The agency will send your full report.'}
+              </p>
+            ) : null}
+
             <button
               type="button"
               onClick={() => {
@@ -521,8 +569,12 @@ function LeadForm() {
                 setShowAccessCode(true)
                 setStep(1)
                 setSuccessMessage('')
+                setSubmittedLeadData(null)
+                setFullMatchList([])
+                setBestMatch(null)
+                setSubjects([{ name: '', score: '' }])
               }}
-              className="mt-6 rounded-full bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-500"
+              className="mt-6 block rounded-full border border-slate-300 px-5 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
             >
               {t.startButton}
             </button>
@@ -578,6 +630,8 @@ function LeadForm() {
           <StepThree
             values={values}
             onChange={updateField}
+            subjects={subjects}
+            onSubjectsChange={setSubjects}
             onDynamicChange={updateDynamicAnswer}
             onBack={() => setStep(2)}
             onNext={handleStepThreeNext}

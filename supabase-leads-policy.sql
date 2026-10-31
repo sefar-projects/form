@@ -15,20 +15,20 @@ drop policy if exists "Allow authenticated update access_codes" on public.access
 drop policy if exists "Allow anon insert leads" on public.leads;
 drop policy if exists "Allow authenticated read leads" on public.leads;
 
--- Anonymous users may read only unused access codes so the public form can verify a code before submission.
+-- Anonymous users may verify unused paid codes and free codes, which remain reusable after submission.
 create policy "Allow anon read access_codes"
 on public.access_codes
 for select
 to anon
-using (used = false);
+using (used = false or tier = 'free');
 
--- Anonymous users may mark an unused code as used when submitting the form.
+-- Anonymous users may consume unused paid codes; free codes are reusable and never consumed.
 create policy "Allow anon consume access_codes"
 on public.access_codes
 for update
 to anon
-using (used = false)
-with check (used = true);
+using (used = false and tier <> 'free')
+with check (used = true and tier <> 'free');
 
 -- Authenticated admins can manage access codes from the dashboard.
 create policy "Allow authenticated read access_codes"
@@ -50,7 +50,7 @@ to authenticated
 using (true)
 with check (true);
 
--- Allow anonymous users to insert a lead only when the access code exists and is still unused.
+-- Allow anonymous users to submit with an unused paid code or any free code.
 create policy "Allow anon insert leads"
 on public.leads
 for insert
@@ -61,7 +61,7 @@ with check (
     select 1
     from public.access_codes ac
     where ac.code = access_code
-      and ac.used = false
+      and (ac.used = false or ac.tier = 'free')
   )
 );
 

@@ -416,13 +416,24 @@ export function compareWithAllUniversities(normalizedLead, universityRules = [],
     return Number.isFinite(numeric) ? numeric : null
   }
 
+  const normalizeSubjectKey = (value) => `${value}`.toLowerCase().replace(/[^a-z0-9]/g, '')
+  const getSubjectScore = (...aliases) => {
+    const entries = Object.entries(subjectScoresRaw)
+    for (const alias of aliases) {
+      const entry = entries.find(([key]) => normalizeSubjectKey(key) === normalizeSubjectKey(alias))
+      if (entry) return parseScoreValue(entry[1])
+    }
+
+    return null
+  }
+
   const leadSubjects = {
-    m_t: parseScoreValue(subjectScoresRaw.m_t ?? subjectScoresRaw['M.T']),
-    phy: parseScoreValue(subjectScoresRaw.phy),
-    se: parseScoreValue(subjectScoresRaw.se ?? subjectScoresRaw.Se),
-    lng: parseScoreValue(subjectScoresRaw.lng ?? subjectScoresRaw.Lng),
-    eco: parseScoreValue(subjectScoresRaw.eco ?? subjectScoresRaw.Eco),
-    geo_his: parseScoreValue(subjectScoresRaw.geo_his ?? subjectScoresRaw['GEO-HIS']),
+    m_t: getSubjectScore('m_t', 'M.T', 'Math'),
+    phy: getSubjectScore('phy', 'Physics'),
+    se: getSubjectScore('se', 'Se', 'Science', 'Biology/Science', 'Biology', 'Chemistry'),
+    lng: getSubjectScore('lng', 'Lng', 'Languages', 'Foreign Languages'),
+    eco: getSubjectScore('eco', 'Eco', 'Economics'),
+    geo_his: getSubjectScore('geo_his', 'GEO-HIS', 'Geo-History', 'History & Geography', 'History&Geography'),
   }
 
   const normalizeMajorText = (value) => `${value || ''}`

@@ -108,7 +108,7 @@ function renderSectionTable(title, rows, isArabic) {
 function renderConversionBanner(isArabic) {
   const heading = isArabic
     ? 'افتح مسارك الدراسي الكامل بالذكاء الاصطناعي والاستشارة المتخصصة!'
-    : 'Unlock Your Full AI Study Path & Expert Consultation!'
+    : '🔒 Unlock Your Full AI Study Path & Expert Consultation'
   const body = isArabic
     ? 'أنت تطلع حالياً على نتائج أولية للأهلية. لفتح ملفك الأكاديمي الكامل بالذكاء الاصطناعي وخارطة الطريق المخصصة ومراجعة كاملة لطلب الجامعة، ابدأ إجراءاتك اليوم مقابل 10,000 دج.'
     : 'You are viewing preliminary eligibility results. To unlock your full AI academic profile, tailored roadmap, and complete university application review, start your procedure today for 10,000 DZD.'
@@ -326,6 +326,26 @@ function openPrintIframe(html) {
 function getLeadSubjectScores(submission) {
   const countryData = parseObjectValue(submission?.country_specific_data)
   const rawScores = submission?.subject_scores || countryData?._meta?.academic?.subject_scores || {}
+  const dynamicSubjectNames = new Set([
+    'Math',
+    'Physics',
+    'Chemistry',
+    'Biology/Science',
+    'Process Engineering',
+    'Literature',
+    'Foreign Languages',
+    'Philosophy',
+    'Economics',
+    'Geo-History',
+    'Other',
+  ])
+  const dynamicScores = Object.fromEntries(
+    Object.entries(rawScores).filter(([key, value]) => dynamicSubjectNames.has(key) && value !== null && value !== undefined && value !== ''),
+  )
+
+  if (Object.keys(dynamicScores).length > 0) {
+    return dynamicScores
+  }
 
   const normalized = {
     m_t: rawScores.m_t ?? rawScores.math ?? rawScores['Math'] ?? rawScores['m math'] ?? null,
@@ -463,6 +483,12 @@ export async function exportUniversityMatchPdf(submission, matchResults, languag
   const textAlign = isArabic ? 'right' : 'left'
   const fullName = `${submission.first_name || ''} ${submission.last_name || ''}`.trim() || submission.name || 'Client'
   const date = new Date().toLocaleDateString('en-GB')
+  const bestMatch = submission.best_match || (Array.isArray(matchResults)
+    ? [...matchResults].sort((a, b) => Number(b?.matchPercentage ?? 0) - Number(a?.matchPercentage ?? 0))[0]
+    : null)
+  const bestMatchSummary = bestMatch
+    ? `<div class="top-match"><strong>${escapeHtml(isArabic ? 'أفضل تطابق' : 'Top Match')}:</strong> ${escapeHtml(bestMatch.cleanUniversityName || bestMatch.university || bestMatch.original_university_string || '—')} - ${escapeHtml(String(bestMatch.matchPercentage ?? bestMatch.recommendation_score ?? '—'))}%</div>`
+    : ''
   const html = `<!DOCTYPE html>
 <html lang="${language}" dir="${dir}">
 <head>
@@ -479,6 +505,7 @@ export async function exportUniversityMatchPdf(submission, matchResults, languag
     .header { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; margin-bottom: 16px; }
     .meta { margin-top: 8px; font-size: 11px; }
     .note { margin-top: 10px; font-size: 10px; color: #475569; }
+    .top-match { margin: 12px 0; border: 1px solid #bfdbfe; border-radius: 8px; background: #eff6ff; padding: 12px; font-size: 13px; }
   </style>
 </head>
 <body>
@@ -492,6 +519,7 @@ export async function exportUniversityMatchPdf(submission, matchResults, languag
     </div>
   </div>
   <h2>${escapeHtml(isArabic ? 'أفضل 5 نتائج مطابقة' : 'Top 5 Best Match Results')}</h2>
+  ${bestMatchSummary}
   ${buildAiRecommendationSection(submission, matchResults, isArabic)}
   ${renderLeadSubjectSummary(submission, isArabic)}
   <table>
@@ -516,8 +544,17 @@ export async function exportUniversityMatchPdf(submission, matchResults, languag
   return openPrintIframe(html)
 }
 
+export async function exportPreliminaryResultsPdf(leadData, fullMatchList, bestMatch, tier = 'free', language = 'en') {
+  return exportUniversityMatchPdf({
+    ...leadData,
+    tier,
+    best_match: bestMatch,
+  }, fullMatchList, language)
+}
+
 export async function exportClientPdf(submission, language = 'en') {
   const isArabic = language === 'ar'
+  const isFreeTier = submission?.tier === 'free'
   const dir = isArabic ? 'rtl' : 'ltr'
   const textAlign = isArabic ? 'right' : 'left'
   const countryData = parseObjectValue(submission.country_specific_data)
@@ -560,6 +597,18 @@ export async function exportClientPdf(submission, language = 'en') {
   const reasonsList = cleanReasons.length > 0
     ? cleanReasons.map((reason) => `<li>${escapeHtml(reason)}</li>`).join('')
     : `<li>${escapeHtml(isArabic ? 'مطابقة عامة لمتطلبات القبول' : 'General match to admission requirements')}</li>`
+  const reportTitle = isFreeTier
+    ? (isArabic ? 'تقرير الأهلية الأولي' : 'Preliminary Eligibility Report')
+    : (isArabic ? 'تقرير تقييم استشاري وفاتورة خدمات' : 'Consulting Evaluation Report & Invoice')
+  const invoiceBlock = isFreeTier
+    ? `<div class="invoice-box invoice-box-free">
+        <div><strong>${escapeHtml(isArabic ? 'رسوم الاستشارة الكاملة بالذكاء الاصطناعي' : 'Full AI Consultation Fee')}:</strong> 10,000 DZD</div>
+        <div class="invoice-stamp-free">${escapeHtml(isArabic ? 'مطلوب الترقية' : 'UPGRADE REQUIRED')}</div>
+      </div>`
+    : `<div class="invoice-box">
+        <div><strong>${escapeHtml(isArabic ? 'رسوم التقييم' : 'Evaluation Fee')}:</strong> 10,000 DZD - ${escapeHtml(isArabic ? 'غير قابلة للاسترداد' : 'Non-refundable')}</div>
+        <div style="color: #059669; font-weight: bold; font-size: 13px; border: 1px solid #059669; padding: 4px 12px; border-radius: 4px;">${escapeHtml(isArabic ? 'تم الدفع / PAID' : 'PAID')}</div>
+      </div>`
 
   const html = `<!DOCTYPE html>
 <html lang="${language}" dir="${dir}">
@@ -596,6 +645,8 @@ export async function exportClientPdf(submission, language = 'en') {
     .exciting-box { border: 2px solid #eab308; padding: 12px; border-radius: 8px; background: #fefce8; font-size: 11px; margin-bottom: 12px; box-shadow: 0 4px 6px -1px rgba(234, 179, 8, 0.2); }
     .highlight-text { font-size: 14px; font-weight: bold; color: #a16207; }
     .invoice-box { border: 2px dashed #059669; background: #ecfdf5; padding: 9px; border-radius: 6px; display: flex; justify-content: space-between; align-items: center; font-size: 10.5px; margin-bottom: 13px; gap: 10px; }
+    .invoice-box-free { border-color: #f97316; background: #fff7ed; color: #9a3412; }
+    .invoice-stamp-free { color: #c2410c; font-weight: bold; font-size: 13px; border: 1px solid #c2410c; padding: 4px 12px; border-radius: 4px; }
     .promo-box { background: #e0f2fe; border-left: 4px solid #0284c7; padding: 10px; font-size: 11px; font-weight: bold; color: #0369a1; text-align: center; margin-bottom: 13px; }
     .disclaimer { font-size: 9px; color: #64748b; border-top: 1px solid #e2e8f0; padding-top: 8px; margin-top: 13px; line-height: 1.4; }
     .signature-area { margin-top: 22px; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 12px; font-size: 10.5px; font-weight: bold; }
@@ -607,7 +658,7 @@ export async function exportClientPdf(submission, language = 'en') {
   <div class="header-box no-break">
     <div>
       <p class="agency-title">${escapeHtml(isArabic ? 'وكالة سيفار ترافل سرفيس للاستشارات التعليمية' : 'Sefar Travel Services')}</p>
-      <p class="doc-title">${escapeHtml(isArabic ? 'تقرير تقييم استشاري وفاتورة خدمات' : 'Consulting Evaluation Report & Invoice')}</p>
+      <p class="doc-title">${escapeHtml(reportTitle)}</p>
     </div>
     <div style="text-align: ${isArabic ? 'left' : 'right'}; font-size: 10px; color: #64748b;">
       <p style="margin: 0;"><strong>${escapeHtml(isArabic ? 'رقم المرجع' : 'Ref Code')}:</strong> ${escapeHtml(submission.access_code || '71998-STS')}</p>
@@ -667,10 +718,7 @@ export async function exportClientPdf(submission, language = 'en') {
     ${escapeHtml(isArabic ? 'مع وكالة سيفار، يمكنك تعزيز حظوظك بشكل كبير لضمان القبول الجامعي والتأشيرة!' : 'With Sefar Travel Services, you can significantly enhance your chances of securing your university admission and visa!')}
   </div>
 
-  <div class="invoice-box">
-      <div><strong>${escapeHtml(isArabic ? 'رسوم التقييم' : 'Evaluation Fee')}:</strong> 10,000 DZD - ${escapeHtml(isArabic ? 'غير قابلة للاسترداد' : 'Non-refundable')}</div>
-      <div style="color: #059669; font-weight: bold; font-size: 13px; border: 1px solid #059669; padding: 4px 12px; border-radius: 4px;">${escapeHtml(isArabic ? 'تم الدفع / PAID' : 'PAID')}</div>
-  </div>
+  ${invoiceBlock}
 
   <div class="disclaimer">
     <p style="margin: 0 0 4px 0;"><strong>${escapeHtml(isArabic ? 'تنويه هام للعميل' : 'Important Notice')}:</strong> ${escapeHtml(isArabic ? 'هذه الوثيقة والفاتورة تمثل تقييماً أولياً واستشارياً فقط لمدى قوة الملف، ولا تعني بأي حال من الأحوال أن إجراءات التسجيل الجامعي أو خطوات التأشيرة قد بدأت فعلياً. بدء الإجراءات يتطلب توقيع عقد منفصل بين العميل والوكالة.' : 'This document is a preliminary consultation and does not mean university or visa procedures have begun. Formal procedures require signing a separate contract.')}</p>
@@ -679,7 +727,7 @@ export async function exportClientPdf(submission, language = 'en') {
 
   <div class="signature-area">
     <div>Sefar Travel Services</div>
-    <div>${escapeHtml(isArabic ? 'المستشار: أسامة لؤي منصورية' : 'Consultant: Oussama Louai eddine Mansouria')}</div>
+    <div>${escapeHtml(isArabic ? 'المستشار: وكالة سيفار ترافل' : 'Consultant: SEFAR TRAVEL AGENCY')}</div>
   </div>
 </body>
 </html>`
