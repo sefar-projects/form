@@ -73,9 +73,13 @@ function getLeadDisplayName(lead) {
   return fullName || lead.email || lead.access_code || 'Unknown lead'
 }
 
-function DashboardPanel({ language = 'en', onBack, onLogout, onManageUniversities }) {
+const FREE_TIER_RATIONALE_EN = 'AI Detailed Evaluation is locked on the Free Tier.'
+const FREE_TIER_RATIONALE_AR = 'التقييم الذكي المفضل مغلق في النسخة المجانية.'
+
+function DashboardPanel({ language = 'en', onBack, onLogout }) {
   const t = translations[language] || translations.en
   const [customerName, setCustomerName] = useState('')
+  const [newCodeTier, setNewCodeTier] = useState('full')
   const [codes, setCodes] = useState([])
   const [submissions, setSubmissions] = useState([])
   const [universityRules, setUniversityRules] = useState([])
@@ -117,7 +121,7 @@ function DashboardPanel({ language = 'en', onBack, onLogout, onManageUniversitie
 
     setLoading(true)
     try {
-      const created = await createAccessCode(customerName.trim())
+      const created = await createAccessCode(customerName.trim(), newCodeTier)
       setMessage(`${t.generatedCodeLabel}: ${created.code}`)
       setCustomerName('')
       await loadData()
@@ -158,6 +162,16 @@ function DashboardPanel({ language = 'en', onBack, onLogout, onManageUniversitie
     const programName = recommendation.programName || recommendation.program || ''
 
     return programName ? `${universityName} / ${programName}` : universityName
+  }
+
+  const getAiRecommendationForRow = (row) => {
+    const countrySpecificData = parseObjectValue(row.country_specific_data)
+    return {
+      best_university_en: countrySpecificData?.best_match_university || countrySpecificData?._meta?.studyPath?.best_university_en || countrySpecificData?.best_university_en || null,
+      best_program_en: countrySpecificData?.best_match_program || countrySpecificData?._meta?.studyPath?.best_program_en || countrySpecificData?.best_program_en || null,
+      why_best_university_en: countrySpecificData?.ai_match_rationale_en || countrySpecificData?._meta?.studyPath?.ai_match_rationale_en || countrySpecificData?._meta?.studyPath?.why_best_university_en || countrySpecificData?.why_best_university_en || null,
+      general_info_en: countrySpecificData?._meta?.studyPath?.general_info_en || countrySpecificData?.general_info_en || null,
+    }
   }
 
   const getRecommendedMajorForRow = (row, result = null) => {
@@ -202,12 +216,20 @@ function DashboardPanel({ language = 'en', onBack, onLogout, onManageUniversitie
       const rules = universityRules.length > 0 ? universityRules : await fetchUniversityCriteria()
       const rawLeadData = buildLeadDataFromSubmission(lead)
       const normalizedLead = normalizeLeadData(rawLeadData)
-      const { data, error: functionError } = await supabase.functions.invoke('evaluate-study-path', {
-        body: normalizedLead,
-      })
+      const isFreeTier = lead.tier === 'free'
 
-      if (functionError) {
-        throw functionError
+      let data
+      if (isFreeTier) {
+        data = { relevance_score: null, reasoning: FREE_TIER_RATIONALE_EN, recommended_major_en: null }
+      } else {
+        const { data: fnData, error: functionError } = await supabase.functions.invoke('evaluate-study-path', {
+          body: normalizedLead,
+        })
+
+        if (functionError) {
+          throw functionError
+        }
+        data = fnData
       }
 
       const scorePayload = calculateChances(normalizedLead, rules, data?.relevance_score)
@@ -223,6 +245,7 @@ function DashboardPanel({ language = 'en', onBack, onLogout, onManageUniversitie
           },
           recommendation,
         },
+        ...(isFreeTier ? { ai_match_rationale_en: FREE_TIER_RATIONALE_EN, ai_match_rationale_ar: FREE_TIER_RATIONALE_AR } : {}),
       }
 
       const updatePayload = {
@@ -285,6 +308,7 @@ function DashboardPanel({ language = 'en', onBack, onLogout, onManageUniversitie
         try {
           const existingCountryData = parseObjectValue(lead.country_specific_data)
           const previousStudyPath = existingCountryData?._meta?.studyPath || {}
+          const isFreeTier = lead.tier === 'free'
 
           const rawLeadData = {
             gpa: lead.gpa,
@@ -301,7 +325,9 @@ function DashboardPanel({ language = 'en', onBack, onLogout, onManageUniversitie
           }
 
           const normalizedLead = normalizeLeadData(rawLeadData)
-          const aiResult = await evaluateStudyPath(normalizedLead)
+          const aiResult = isFreeTier
+            ? { relevance_score: null, reasoning: FREE_TIER_RATIONALE_EN, recommended_major_en: null }
+            : await evaluateStudyPath(normalizedLead)
 
           const scorePayload = calculateChances(
             normalizedLead,
@@ -312,10 +338,10 @@ function DashboardPanel({ language = 'en', onBack, onLogout, onManageUniversitie
           const fullMatchList = compareWithAllUniversities(normalizedLead, universityRules)
           const bestMatch = suggestBestUniversity(fullMatchList, normalizedLead)
 
-          let rationaleEn = 'Rationale not generated.'
-          let rationaleAr = 'لم يتم توفير شرح باللغة العربية.'
+          let rationaleEn = isFreeTier ? FREE_TIER_RATIONALE_EN : 'Rationale not generated.'
+          let rationaleAr = isFreeTier ? FREE_TIER_RATIONALE_AR : 'لم يتم توفير شرح باللغة العربية.'
 
-          if (bestMatch) {
+          if (!isFreeTier && bestMatch) {
             const rationaleResponse = await supabase.functions.invoke('evaluate-study-path', {
               body: {
                 action: 'generate_rationale',
@@ -451,9 +477,6 @@ function DashboardPanel({ language = 'en', onBack, onLogout, onManageUniversitie
             <p className="mt-1 text-sm text-slate-500">{t.dashboardSubtitle}</p>
           </div>
           <div className="flex items-center gap-2">
-            <button type="button" onClick={onManageUniversities} className="rounded-full border border-sky-200 px-4 py-2 text-sm font-semibold text-sky-700">
-              University Criteria
-            </button>
             <button type="button" onClick={exportPdf} className="rounded-full border border-sky-200 px-4 py-2 text-sm font-semibold text-sky-700">
               {t.exportPdfButton}
             </button>
@@ -473,6 +496,14 @@ function DashboardPanel({ language = 'en', onBack, onLogout, onManageUniversitie
             className="flex-1 rounded-full border border-sky-100 bg-sky-50 px-4 py-3 text-sm text-slate-700"
             placeholder={t.customerNamePlaceholder}
           />
+          <select
+            value={newCodeTier}
+            onChange={(event) => setNewCodeTier(event.target.value)}
+            className="rounded-full border border-sky-100 bg-sky-50 px-4 py-3 text-sm text-slate-700"
+          >
+            <option value="full">Full (paid AI evaluation)</option>
+            <option value="free">Free (local match only)</option>
+          </select>
           <button type="submit" disabled={loading} className="rounded-full bg-sky-600 px-5 py-3 text-sm font-semibold text-white disabled:opacity-70">
             {loading ? t.generating : t.generateCodeButton}
           </button>
@@ -498,6 +529,8 @@ function DashboardPanel({ language = 'en', onBack, onLogout, onManageUniversitie
                 </div>
                 <div className="mt-2 flex items-center gap-3 text-xs text-slate-500">
                   <span>{row.used ? t.usedLabel : t.activeLabel}</span>
+                  <span>•</span>
+                  <span>{row.tier === 'free' ? 'Free tier' : 'Full tier'}</span>
                   <span>•</span>
                   <span>{new Date(row.created_at).toLocaleString()}</span>
                 </div>
@@ -603,27 +636,41 @@ function DashboardPanel({ language = 'en', onBack, onLogout, onManageUniversitie
 
                   {selectedSubmissionId === row.id ? (
                     <div className="mt-3 rounded-xl border border-sky-100 bg-white p-3">
-                      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">AI Study Path Evaluation</p>
-                      <p className="mt-2 text-sm text-slate-700">{row.study_path_explanation || 'No AI explanation available.'}</p>
-
-                      {(() => {
-                        const rowCountrySpecificData = parseObjectValue(row.country_specific_data)
-                        const bestMatchUniversity = rowCountrySpecificData?.best_match_university || rowCountrySpecificData?._meta?.studyPath?.best_university_en || 'Not Available'
-                        const bestMatchProgram = rowCountrySpecificData?.best_match_program || rowCountrySpecificData?._meta?.studyPath?.best_program_en || 'Not Available'
-                        const bestMatchRationale = rowCountrySpecificData?.ai_match_rationale_en || rowCountrySpecificData?._meta?.studyPath?.ai_match_rationale_en || 'Rationale not available.'
-                        const hasAiRecommendation = bestMatchUniversity !== 'Not Available' || bestMatchProgram !== 'Not Available' || bestMatchRationale !== 'Rationale not available.'
-
-                        if (!hasAiRecommendation) return null
-
-                        return (
-                          <div className="mt-4 rounded-xl border border-violet-200 bg-violet-50 p-3">
-                            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-violet-700">AI Recommendation</p>
-                            <p className="mt-2 text-sm text-slate-800"><span className="font-semibold">University:</span> {bestMatchUniversity}</p>
-                            <p className="mt-1 text-sm text-slate-800"><span className="font-semibold">Program:</span> {bestMatchProgram}</p>
-                            <p className="mt-2 text-xs text-slate-700"><span className="font-semibold">Why this fit:</span> {bestMatchRationale}</p>
+                      {row.tier === 'free' ? (
+                        <div className="bg-slate-900 text-white p-6 rounded-lg my-6 text-center border border-slate-800">
+                          <h3 className="text-xl font-bold mb-2">Unlock Your Full AI Study Path & Expert Consultation!</h3>
+                          <p className="text-slate-300 mb-4 text-sm">
+                            You are viewing preliminary eligibility results. To unlock your full AI academic profile, tailored roadmap, and complete university application review, start your procedure today for 10,000 DZD.
+                          </p>
+                          <div className="bg-slate-800 text-white px-4 py-3 rounded font-medium text-sm inline-block border border-slate-700">
+                            Contact Sefar Travel Agency: +213 562-884-864
                           </div>
-                        )
-                      })()}
+                        </div>
+                      ) : (
+                        <>
+                          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">AI Study Path Evaluation</p>
+                          <p className="mt-2 text-sm text-slate-700">{row.study_path_explanation || 'No AI explanation available.'}</p>
+
+                          {(() => {
+                            const rowCountrySpecificData = parseObjectValue(row.country_specific_data)
+                            const bestMatchUniversity = rowCountrySpecificData?.best_match_university || rowCountrySpecificData?._meta?.studyPath?.best_university_en || 'Not Available'
+                            const bestMatchProgram = rowCountrySpecificData?.best_match_program || rowCountrySpecificData?._meta?.studyPath?.best_program_en || 'Not Available'
+                            const bestMatchRationale = rowCountrySpecificData?.ai_match_rationale_en || rowCountrySpecificData?._meta?.studyPath?.ai_match_rationale_en || 'Rationale not available.'
+                            const hasAiRecommendation = bestMatchUniversity !== 'Not Available' || bestMatchProgram !== 'Not Available' || bestMatchRationale !== 'Rationale not available.'
+
+                            if (!hasAiRecommendation) return null
+
+                            return (
+                              <div className="mt-4 rounded-xl border border-violet-200 bg-violet-50 p-3">
+                                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-violet-700">AI Recommendation</p>
+                                <p className="mt-2 text-sm text-slate-800"><span className="font-semibold">University:</span> {bestMatchUniversity}</p>
+                                <p className="mt-1 text-sm text-slate-800"><span className="font-semibold">Program:</span> {bestMatchProgram}</p>
+                                <p className="mt-2 text-xs text-slate-700"><span className="font-semibold">Why this fit:</span> {bestMatchRationale}</p>
+                              </div>
+                            )
+                          })()}
+                        </>
+                      )}
 
                       {getRecommendationForRow(row) ? (
                         <>

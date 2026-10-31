@@ -1,18 +1,18 @@
 import { useEffect, useMemo, useState } from 'react'
 import { countriesConfig } from '../../config/countriesConfig'
-import { getAccessCodeByValue, consumeAccessCode } from '../../services/accessCodeService'
+import { consumeAccessCode } from '../../services/accessCodeService'
 import { evaluateStudyPath, fetchUniversityCriteria, submitLead } from '../../services/supabaseService'
-import { calculateChances, suggestBestUniversity } from '../../utils/chancesCalculator'
+import { calculateChances, compareWithAllUniversities, suggestBestUniversity } from '../../utils/chancesCalculator'
 import { normalizeLeadData } from '../../utils/normalizeLead'
 import { translations } from '../../i18n/translations'
 import logo from '../../assets/logo.png'
+import LandingPage from './LandingPage'
 import StepOne from './StepOne'
 import StepTwo from './StepTwo'
 import StepThree from './StepThree'
 import StepFour from './StepFour.jsx'
 import AdminLogin from '../Admin/AdminLogin'
 import DashboardPanel from '../Dashboard/DashboardPanel'
-import UniversityManager from '../Dashboard/UniversityManager'
 
 const initialValues = {
   firstName: '',
@@ -66,9 +66,8 @@ function LeadForm() {
   const [showAccessCode, setShowAccessCode] = useState(true)
   const [showAdmin, setShowAdmin] = useState(false)
   const [showDashboard, setShowDashboard] = useState(false)
-  const [showUniversityManager, setShowUniversityManager] = useState(false)
   const [accessCode, setAccessCode] = useState('')
-  const [accessCodeError, setAccessCodeError] = useState('')
+  const [accessCodeTier, setAccessCodeTier] = useState('full')
   const [step, setStep] = useState(1)
   const [values, setValues] = useState(initialValues)
   const [error, setError] = useState('')
@@ -81,6 +80,7 @@ function LeadForm() {
 
   const t = translations[language] || translations.en
   const normalizedAccessCode = `${accessCode}`.trim().toUpperCase().replaceAll(/\s+/g, '')
+  const showLandingPage = !isCompleted && (showIntro || showAccessCode) && !showAdmin && !showDashboard
 
   const englishLevelForScoring = useMemo(() => {
     if (
@@ -146,34 +146,14 @@ function LeadForm() {
     setStepErrors((current) => ({ ...current, countrySelection: '' }))
   }
 
-  const handleLanguageSelect = (nextLanguage) => {
-    setLanguage(nextLanguage)
+  const handleAccessVerified = ({ code, tier }) => {
+    setAccessCode(code)
+    setAccessCodeTier(tier)
+    setShowAccessCode(false)
     setShowIntro(false)
-    setShowAccessCode(true)
     setStep(1)
     setError('')
     setStepErrors({})
-  }
-
-  const handleAccessCodeSubmit = async (event) => {
-    event.preventDefault()
-    setAccessCodeError('')
-
-    try {
-      const codeRow = await getAccessCodeByValue(normalizedAccessCode)
-      if (!codeRow || codeRow.used) {
-        setAccessCodeError(t.accessCodeError)
-        return
-      }
-
-      setShowAccessCode(false)
-      setShowIntro(false)
-      setStep(1)
-      setError('')
-      setStepErrors({})
-    } catch (accessError) {
-      setAccessCodeError(accessError.message || t.accessCodeError)
-    }
   }
 
   const handleStepOneNext = () => {
@@ -390,13 +370,22 @@ function LeadForm() {
 
       const normalizedLeadInput = normalizeLeadData(rawLeadData)
 
-      const aiResult = await evaluateStudyPath(normalizedLeadInput)
+      const aiEvaluationData = accessCodeTier === 'free'
+        ? {
+            relevance_score: null,
+            reasoning: '🔒 AI Evaluation is locked on the Free Tier.',
+            reasoning_ar: '🔒 التقييم الذكي مغلق في النسخة المجانية.',
+            actionable_advice_en: ['Upgrade to the full consultation to unlock AI insights.'],
+            actionable_advice_ar: ['قم بالترقية إلى الاستشارة الكاملة لفتح الرؤى الذكية.'],
+            recommended_major_en: null,
+          }
+        : await evaluateStudyPath(normalizedLeadInput)
 
       countrySpecificData._meta.studyPath = {
         previousDegree,
         targetDegree,
-        score: aiResult.relevance_score,
-        reasoning: aiResult.reasoning,
+        ...aiEvaluationData,
+        score: aiEvaluationData.relevance_score,
       }
 
       countrySpecificData._meta.academic.subject_scores = {
@@ -411,14 +400,11 @@ function LeadForm() {
       const scorePayload = calculateChances(
         normalizedLeadInput,
         universityRules,
-        aiResult.relevance_score,
+        aiEvaluationData.relevance_score,
       )
 
-      const recommendation = suggestBestUniversity(
-        normalizedLeadInput,
-        universityRules,
-        scorePayload,
-      )
+      const universityMatches = compareWithAllUniversities(normalizedLeadInput, universityRules)
+      const recommendation = suggestBestUniversity(universityMatches, normalizedLeadInput)
 
       countrySpecificData._meta.recommendation = recommendation
 
@@ -436,15 +422,18 @@ function LeadForm() {
         englishLevel: englishLevelForScoring,
         selectedCountries: values.selectedCountries,
         agencyInternalScore: scorePayload,
-        studyPathScore: aiResult.relevance_score,
-        studyPathExplanation: aiResult.reasoning,
+        studyPathScore: aiEvaluationData.relevance_score,
+        studyPathExplanation: aiEvaluationData.reasoning,
         countrySpecificData,
         accessCode: normalizedAccessCode,
+        tier: accessCodeTier,
       })
 
-      const consumed = await consumeAccessCode(normalizedAccessCode)
-      if (!consumed) {
-        throw new Error(t.accessCodeError)
+      if (accessCodeTier !== 'free') {
+        const consumed = await consumeAccessCode(normalizedAccessCode)
+        if (!consumed) {
+          throw new Error(t.accessCodeError)
+        }
       }
 
       setSuccessMessage(t.submissionSuccess)
@@ -465,40 +454,48 @@ function LeadForm() {
       className="mx-auto flex min-h-screen w-full max-w-5xl items-center justify-center px-4 py-8 sm:px-6 lg:px-8"
       dir={language === 'ar' ? 'rtl' : 'ltr'}
     >
-      <div className="w-full rounded-[2rem] border border-sky-100 bg-white/95 p-6 shadow-[0_20px_80px_-20px_rgba(14,165,233,0.35)] backdrop-blur sm:p-8">
-        <div className="mb-8 flex flex-col gap-4 border-b border-sky-100 pb-6 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-4">
-            <img src={logo} alt={t.agencyName} className="h-14 w-14 rounded-2xl object-contain ring-1 ring-sky-100" />
-            <div>
-              <p className="text-sm font-semibold uppercase tracking-[0.35em] text-sky-600">{t.agencyName}</p>
-              <h2 className="mt-1 text-2xl font-semibold text-slate-800">{showIntro ? t.welcomeTitle : t.formTitle}</h2>
-              <p className="mt-1 text-sm text-slate-500">{showIntro ? t.welcomeSubtitle : t.formHint}</p>
+      <div
+        className={
+          showLandingPage
+            ? 'w-full'
+            : 'w-full rounded-[2rem] border border-sky-100 bg-white/95 p-6 shadow-[0_20px_80px_-20px_rgba(14,165,233,0.35)] backdrop-blur sm:p-8'
+        }
+      >
+        {!showLandingPage ? (
+          <div className="mb-8 flex flex-col gap-4 border-b border-sky-100 pb-6 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-4">
+              <img src={logo} alt={t.agencyName} className="h-14 w-14 rounded-2xl object-contain ring-1 ring-sky-100" />
+              <div>
+                <p className="text-sm font-semibold uppercase tracking-[0.35em] text-sky-600">{t.agencyName}</p>
+                <h2 className="mt-1 text-2xl font-semibold text-slate-800">{showIntro ? t.welcomeTitle : t.formTitle}</h2>
+                <p className="mt-1 text-sm text-slate-500">{showIntro ? t.welcomeSubtitle : t.formHint}</p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              {!showDashboard && !showAdmin ? (
+                <button
+                  type="button"
+                  onClick={() => setShowAdmin(true)}
+                  className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-sky-200 bg-white text-sky-700 transition hover:border-sky-300"
+                  title={t.adminLoginTitle}
+                  aria-label={t.adminLoginTitle}
+                >
+                  <svg viewBox="0 0 24 24" fill="none" className="h-5 w-5" aria-hidden="true">
+                    <path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z" stroke="currentColor" strokeWidth="1.8" />
+                    <path d="M4.5 20a7.5 7.5 0 0 1 15 0" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                  </svg>
+                </button>
+              ) : null}
+
+              {!showIntro && !showAccessCode && !showDashboard ? (
+                <div className="rounded-full border border-sky-200 bg-sky-50 px-3 py-2 text-sm font-medium text-sky-700">
+                  {t.stepLabel} {step} / 4
+                </div>
+              ) : null}
             </div>
           </div>
-
-          <div className="flex items-center gap-2">
-            {!showDashboard && !showAdmin && !showUniversityManager ? (
-              <button
-                type="button"
-                onClick={() => setShowAdmin(true)}
-                className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-sky-200 bg-white text-sky-700 transition hover:border-sky-300"
-                title={t.adminLoginTitle}
-                aria-label={t.adminLoginTitle}
-              >
-                <svg viewBox="0 0 24 24" fill="none" className="h-5 w-5" aria-hidden="true">
-                  <path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z" stroke="currentColor" strokeWidth="1.8" />
-                  <path d="M4.5 20a7.5 7.5 0 0 1 15 0" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-                </svg>
-              </button>
-            ) : null}
-
-            {!showIntro && !showAccessCode && !showDashboard && !showUniversityManager ? (
-              <div className="rounded-full border border-sky-200 bg-sky-50 px-3 py-2 text-sm font-medium text-sky-700">
-                {t.stepLabel} {step} / 4
-              </div>
-            ) : null}
-          </div>
-        </div>
+        ) : null}
 
         {successMessage ? (
           <div className="mb-6 rounded-2xl border border-emerald-500/30 bg-emerald-50 p-4 text-sm text-emerald-700">
@@ -546,79 +543,19 @@ function LeadForm() {
           <DashboardPanel
             language={language}
             onBack={() => setShowDashboard(false)}
-            onManageUniversities={() => {
-              setShowDashboard(false)
-              setShowUniversityManager(true)
-            }}
             onLogout={() => {
               setShowDashboard(false)
               setShowAdmin(false)
-              setShowUniversityManager(false)
             }}
           />
         ) : null}
 
-        {!isCompleted && showUniversityManager ? (
-          <UniversityManager onBack={() => {
-            setShowUniversityManager(false)
-            setShowDashboard(true)
-          }} />
-        ) : null}
-
-        {!isCompleted && showIntro ? (
-          <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
-            <div className="rounded-[1.5rem] border border-sky-100 bg-sky-50/80 p-6">
-              <p className="text-sm font-semibold uppercase tracking-[0.3em] text-sky-600">{t.chooseLanguage}</p>
-              <h3 className="mt-3 text-3xl font-semibold text-slate-800">{t.welcomeTitle}</h3>
-              <p className="mt-3 text-base text-slate-600">{t.welcomeSubtitle}</p>
-
-              <div className="mt-6 flex flex-col gap-3 sm:flex-row">
-                <button
-                  type="button"
-                  onClick={() => handleLanguageSelect('en')}
-                  className="rounded-full bg-sky-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-sky-500"
-                >
-                  {t.english}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleLanguageSelect('ar')}
-                  className="rounded-full border border-sky-200 bg-white px-5 py-3 text-sm font-semibold text-sky-700 transition hover:border-sky-300"
-                >
-                  {t.arabic}
-                </button>
-              </div>
-            </div>
-
-            <div className="rounded-[1.5rem] border border-sky-100 bg-white p-6">
-              <p className="text-sm font-semibold uppercase tracking-[0.3em] text-slate-500">{t.agencyName}</p>
-              <ul className="mt-4 space-y-3 text-sm text-slate-600">
-                {t.introBenefits.map((item) => (
-                  <li key={item} className="flex items-start gap-2">
-                    <span className="mt-1 h-2.5 w-2.5 rounded-full bg-sky-500" />
-                    <span>{item}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </div>
-        ) : null}
-
-        {!isCompleted && !showIntro && showAccessCode && !showAdmin && !showDashboard && !showUniversityManager ? (
-          <form onSubmit={handleAccessCodeSubmit} className="rounded-[1.5rem] border border-sky-100 bg-white p-6">
-            <h3 className="text-2xl font-semibold text-slate-800">{t.accessCodeTitle}</h3>
-            <p className="mt-2 text-sm text-slate-500">{t.accessCodeHint}</p>
-            <input
-              value={accessCode}
-              onChange={(event) => setAccessCode(event.target.value)}
-              className="mt-4 w-full rounded-full border border-sky-100 bg-sky-50 px-4 py-3 text-sm text-slate-700"
-              placeholder={t.accessCodePlaceholder}
-            />
-            {accessCodeError ? <p className="mt-3 text-sm text-rose-500">{accessCodeError}</p> : null}
-            <button type="submit" className="mt-4 rounded-full bg-sky-600 px-5 py-3 text-sm font-semibold text-white">
-              {t.unlockFormButton}
-            </button>
-          </form>
+        {showLandingPage ? (
+          <LandingPage
+            onLanguageChange={setLanguage}
+            onAdminClick={() => setShowAdmin(true)}
+            onVerified={handleAccessVerified}
+          />
         ) : null}
 
         {!isCompleted && !showIntro && !showAccessCode && step === 1 ? (

@@ -33,14 +33,15 @@ export async function consumeAccessCode(code, leadId) {
   return (data || []).length > 0
 }
 
-export async function createAccessCode(customerName) {
+export async function createAccessCode(customerName, tier = 'full') {
   if (!supabase) throw new Error('Supabase is not configured.')
 
   const code = normalizeAccessCode(Math.random().toString(36).slice(2, 10))
+  const normalizedTier = tier === 'free' ? 'free' : 'full'
 
   const { data, error } = await supabase
     .from('access_codes')
-    .insert([{ customer_name: customerName, code, used: false }])
+    .insert([{ customer_name: customerName, code, used: false, tier: normalizedTier }])
     .select()
     .single()
 

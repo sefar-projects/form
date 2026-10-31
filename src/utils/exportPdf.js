@@ -105,7 +105,30 @@ function renderSectionTable(title, rows, isArabic) {
     </table>`
 }
 
+function renderConversionBanner(isArabic) {
+  const heading = isArabic
+    ? 'افتح مسارك الدراسي الكامل بالذكاء الاصطناعي والاستشارة المتخصصة!'
+    : 'Unlock Your Full AI Study Path & Expert Consultation!'
+  const body = isArabic
+    ? 'أنت تطلع حالياً على نتائج أولية للأهلية. لفتح ملفك الأكاديمي الكامل بالذكاء الاصطناعي وخارطة الطريق المخصصة ومراجعة كاملة لطلب الجامعة، ابدأ إجراءاتك اليوم مقابل 10,000 دج.'
+    : 'You are viewing preliminary eligibility results. To unlock your full AI academic profile, tailored roadmap, and complete university application review, start your procedure today for 10,000 DZD.'
+  const contact = isArabic
+    ? 'تواصل مع وكالة سيفار ترافل: +213 562-884-864'
+    : 'Contact Sefar Travel Agency: +213 562-884-864'
+
+  return `
+    <div style="background: #0f172a; color: #ffffff; padding: 18px; border-radius: 10px; margin: 16px 0; text-align: center; border: 1px solid #1e293b;">
+      <h2 style="margin: 0 0 8px; font-size: 15px; font-weight: 700; color: #ffffff;">${escapeHtml(heading)}</h2>
+      <p style="margin: 0 0 12px; font-size: 11px; color: #cbd5e1;">${escapeHtml(body)}</p>
+      <div style="display: inline-block; background: #1e293b; color: #ffffff; padding: 8px 14px; border-radius: 6px; font-size: 11px; font-weight: 600; border: 1px solid #334155;">${escapeHtml(contact)}</div>
+    </div>`
+}
+
 function renderAiEvaluationSection(submission, isArabic) {
+  if (submission?.tier === 'free') {
+    return renderConversionBanner(isArabic)
+  }
+
   const countryData = parseObjectValue(submission.country_specific_data)
   const studyPathMeta = parseObjectValue(countryData?._meta?.studyPath)
 
@@ -390,6 +413,10 @@ function renderUniversityMatchRows(results, isArabic, submission = {}) {
 }
 
 function buildAiRecommendationSection(submission, matchResults, isArabic) {
+  if (submission?.tier === 'free') {
+    return renderConversionBanner(isArabic)
+  }
+
   const countrySpecificData = parseObjectValue(submission.country_specific_data)
   const aiFields = countrySpecificData?._meta?.studyPath || {}
 
@@ -634,7 +661,7 @@ export async function exportClientPdf(submission, language = 'en') {
   </div>
 
   <div class="section-title">${escapeHtml(isArabic ? 'التقييم الأكاديمي' : 'Academic Evaluation')}</div>
-  <div class="content-box">${escapeHtml(academicExplanation)}</div>
+  ${submission.tier === 'free' ? renderConversionBanner(isArabic) : `<div class="content-box">${escapeHtml(academicExplanation)}</div>`}
 
   <div class="promo-box">
     ${escapeHtml(isArabic ? 'مع وكالة سيفار، يمكنك تعزيز حظوظك بشكل كبير لضمان القبول الجامعي والتأشيرة!' : 'With Sefar Travel Services, you can significantly enhance your chances of securing your university admission and visa!')}

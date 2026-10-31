@@ -69,6 +69,7 @@ export async function submitLead(leadData) {
     study_path_explanation: leadData.studyPathExplanation ?? null,
     country_specific_data: leadData.countrySpecificData,
     access_code: leadData.accessCode || null,
+    tier: leadData.tier === 'free' ? 'free' : 'full',
   }
 
   const { error } = await supabase.from('leads').insert([payload], { returning: 'minimal' })

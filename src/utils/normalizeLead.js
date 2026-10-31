@@ -81,7 +81,7 @@ export function normalizeLeadData(lead = {}) {
   ).toLowerCase().trim()
 
   let normalizedDegree = 'High School Degree (Baccalaureate)'
-  if (rawDegree.includes('بكالوريا') || rawDegree.includes('bac') || rawDegree.includes('high school')) {
+  if (rawDegree.includes('بكالوريا') || rawDegree.includes('baccalaureate') || rawDegree.includes('high school')) {
     normalizedDegree = 'High School Degree (Baccalaureate)'
   } else if (rawDegree.includes('ليسانس') || rawDegree.includes('bachelor') || rawDegree.includes('licence') || rawDegree.includes('license')) {
     normalizedDegree = 'Bachelor Degree'
