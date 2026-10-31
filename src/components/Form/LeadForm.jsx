@@ -6,7 +6,7 @@ import { calculateChances, compareWithAllUniversities, suggestBestUniversity } f
 import { normalizeLeadData } from '../../utils/normalizeLead'
 import { translations } from '../../i18n/translations'
 import logo from '../../assets/logo.png'
-import { exportPreliminaryResultsPdf } from '../../utils/exportPdf'
+import { exportClientPdf } from '../../utils/exportPdf'
 import LandingPage from './LandingPage'
 import StepOne from './StepOne'
 import StepTwo from './StepTwo'
@@ -49,6 +49,8 @@ const initialValues = {
   relativesSponsorDetails: '',
   annualSponsorIncome: '',
   sponsorEmploymentStatus: '',
+  sponsorWorkplace: '',
+  sponsorOccupation: '',
   tuitionBudgetRange: '',
   fundsAvailabilityTimeline: '',
   fundsExplanation: '',
@@ -57,7 +59,8 @@ const initialValues = {
 
 function LeadForm() {
   const [language, setLanguage] = useState('en')
-  const [subjects, setSubjects] = useState([{ name: '', score: '' }])
+  const [subjects, setSubjects] = useState([{ name: '', customName: '', score: '' }])
+  const [additionalSponsors, setAdditionalSponsors] = useState([])
   const [showIntro, setShowIntro] = useState(true)
   const [showAccessCode, setShowAccessCode] = useState(true)
   const [showAdmin, setShowAdmin] = useState(false)
@@ -279,6 +282,20 @@ function LeadForm() {
 
     if (!values.annualSponsorIncome.trim()) errors.annualSponsorIncome = t.validation.annualSponsorIncome
     if (!values.sponsorEmploymentStatus) errors.sponsorEmploymentStatus = t.validation.sponsorEmploymentStatus
+    if (['Business owner', 'Employee'].includes(values.sponsorEmploymentStatus)) {
+      if (!values.sponsorWorkplace.trim()) errors.sponsorWorkplace = t.validation.sponsorWorkplace
+      if (!values.sponsorOccupation.trim()) errors.sponsorOccupation = t.validation.sponsorOccupation
+    }
+    additionalSponsors.forEach((sponsor, index) => {
+      if (!sponsor.name.trim()) errors[`additionalSponsor.${index}.name`] = t.validation.additionalSponsorName
+      if (!sponsor.relationship) errors[`additionalSponsor.${index}.relationship`] = t.validation.financialSponsor
+      if (!sponsor.annualIncome.trim()) errors[`additionalSponsor.${index}.annualIncome`] = t.validation.annualSponsorIncome
+      if (!sponsor.employmentStatus) errors[`additionalSponsor.${index}.employmentStatus`] = t.validation.sponsorEmploymentStatus
+      if (['Business owner', 'Employee'].includes(sponsor.employmentStatus)) {
+        if (!sponsor.workplace.trim()) errors[`additionalSponsor.${index}.workplace`] = t.validation.sponsorWorkplace
+        if (!sponsor.occupation.trim()) errors[`additionalSponsor.${index}.occupation`] = t.validation.sponsorOccupation
+      }
+    })
     if (!values.tuitionBudgetRange) errors.tuitionBudgetRange = t.validation.tuitionBudgetRange
     if (!values.fundsAvailabilityTimeline) errors.fundsAvailabilityTimeline = t.validation.fundsAvailabilityTimeline
 
@@ -327,6 +344,9 @@ function LeadForm() {
             relativesSponsorDetails: values.relativesSponsorDetails,
             annualSponsorIncome: values.annualSponsorIncome,
             sponsorEmploymentStatus: values.sponsorEmploymentStatus,
+            sponsorWorkplace: values.sponsorWorkplace,
+            sponsorOccupation: values.sponsorOccupation,
+            additionalSponsors,
             tuitionBudgetRange: values.tuitionBudgetRange,
             fundsAvailabilityTimeline: values.fundsAvailabilityTimeline,
             fundsExplanation: values.fundsExplanation,
@@ -340,11 +360,13 @@ function LeadForm() {
       const targetDegree = `${firstCountryAnswers.desiredLevel || values.degreeType || ''} ${firstCountryAnswers.specialization1 || values.studyField || ''}`.trim()
       const previousDegree = `${values.degreeType || 'Previous degree'} in ${values.studyField || 'Unknown field'}`
 
-      const subjectScores = Object.fromEntries(
-        subjects
-          .filter((subject) => subject.name && subject.score !== '')
-          .map((subject) => [subject.name, Number(subject.score)]),
-      )
+      const subjectScores = subjects.reduce((scores, subject) => {
+        const key = subject.name === 'Other' ? (subject.customName || '').trim() : subject.name
+        if (key && subject.score !== '') {
+          scores[key] = Number.parseFloat(subject.score)
+        }
+        return scores
+      }, {})
       countrySpecificData._meta.academic.subject_scores = subjectScores
 
       const rawLeadData = {
@@ -513,19 +535,6 @@ function LeadForm() {
             <h3 className="text-2xl font-semibold text-slate-900">
               {language === 'ar' ? 'نتائجك الأولية' : 'Your Preliminary Results'}
             </h3>
-            {bestMatch ? (
-              <p className="mt-4 text-lg font-semibold text-slate-800">
-                {language === 'ar' ? 'أفضل تطابق' : 'Top Match'}:{' '}
-                {bestMatch.cleanUniversityName || bestMatch.university || bestMatch.original_university_string || '—'}
-                {' - '}
-                {bestMatch.matchPercentage ?? bestMatch.recommendation_score ?? '—'}%
-              </p>
-            ) : (
-              <p className="mt-4 text-sm text-slate-600">
-                {language === 'ar' ? 'لم يتم العثور على نتائج مطابقة.' : 'No university matches were found.'}
-              </p>
-            )}
-
             {accessCodeTier === 'free' ? (
               <div className="my-6 rounded-lg border border-slate-800 bg-slate-900 p-6 text-center text-white">
                 <h4 className="mb-2 text-xl font-bold">🔒 Unlock Your Full AI Study Path &amp; Expert Consultation</h4>
@@ -541,13 +550,12 @@ function LeadForm() {
             {submittedLeadData && accessCodeTier === 'free' ? (
               <button
                 type="button"
-                onClick={() => exportPreliminaryResultsPdf(
-                  submittedLeadData,
-                  fullMatchList,
-                  bestMatch,
-                  accessCodeTier,
-                  language,
-                )}
+                onClick={() => exportClientPdf({
+                  ...submittedLeadData,
+                  tier: accessCodeTier,
+                  best_match: bestMatch,
+                  full_match_list: fullMatchList,
+                }, language)}
                 className="w-full rounded-lg bg-blue-700 px-5 py-3 text-sm font-semibold text-white transition hover:bg-blue-600 sm:w-auto"
               >
                 {language === 'ar' ? 'تنزيل تقرير PDF' : 'Download PDF'}
@@ -572,7 +580,8 @@ function LeadForm() {
                 setSubmittedLeadData(null)
                 setFullMatchList([])
                 setBestMatch(null)
-                setSubjects([{ name: '', score: '' }])
+                setSubjects([{ name: '', customName: '', score: '' }])
+                setAdditionalSponsors([])
               }}
               className="mt-6 block rounded-full border border-slate-300 px-5 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
             >
@@ -645,6 +654,8 @@ function LeadForm() {
           <StepFour
             values={values}
             onChange={updateField}
+            additionalSponsors={additionalSponsors}
+            onAdditionalSponsorsChange={setAdditionalSponsors}
             onBack={() => setStep(3)}
             onSubmit={handleSubmit}
             error={error}

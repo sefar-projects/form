@@ -191,7 +191,9 @@ function StepThree({ values, onChange, subjects, onSubjectsChange, onDynamicChan
                   <select
                     value={subject.name}
                     onChange={(event) => onSubjectsChange((current) => current.map((item, itemIndex) => (
-                      itemIndex === index ? { ...item, name: event.target.value } : item
+                      itemIndex === index
+                        ? { ...item, name: event.target.value, customName: event.target.value === 'Other' ? item.customName : '' }
+                        : item
                     )))}
                     className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700 outline-none transition focus:border-sky-500"
                   >
@@ -200,12 +202,23 @@ function StepThree({ values, onChange, subjects, onSubjectsChange, onDynamicChan
                       <option
                         key={value}
                         value={value}
-                        disabled={subjects.some((item, itemIndex) => itemIndex !== index && item.name === value)}
+                        disabled={value !== 'Other' && subjects.some((item, itemIndex) => itemIndex !== index && item.name === value)}
                       >
                         {t[translationKey]}
                       </option>
                     ))}
                   </select>
+                  {subject.name === 'Other' ? (
+                    <input
+                      type="text"
+                      value={subject.customName}
+                      onChange={(event) => onSubjectsChange((current) => current.map((item, itemIndex) => (
+                        itemIndex === index ? { ...item, customName: event.target.value } : item
+                      )))}
+                      className="mt-2 w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700 outline-none transition focus:border-sky-500"
+                      placeholder={t.customSubjectPlaceholder}
+                    />
+                  ) : null}
                 </label>
                 <label className="block text-sm font-medium text-slate-700">
                   <span className="mb-2 block">{t.subjectScoreLabel}</span>
@@ -236,7 +249,7 @@ function StepThree({ values, onChange, subjects, onSubjectsChange, onDynamicChan
           </div>
           <button
             type="button"
-            onClick={() => onSubjectsChange((current) => [...current, { name: '', score: '' }])}
+            onClick={() => onSubjectsChange((current) => [...current, { name: '', customName: '', score: '' }])}
             className="mt-4 rounded-lg border border-sky-200 bg-sky-50 px-4 py-2.5 text-sm font-semibold text-sky-700 transition hover:bg-sky-100"
           >
             + {t.addSubject}

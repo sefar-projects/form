@@ -56,8 +56,10 @@ function buildSectionRows(submission, isArabic, countryData) {
     lastDegreeDate: isArabic ? 'تاريخ الشهادة الأخيرة' : 'Last degree date',
     gapYears: isArabic ? 'سنوات الفاصل' : 'Gap years',
     studiedInEnglish: isArabic ? 'هل درست باللغة الإنجليزية سابقًا؟' : 'Studied in English before',
+    subjectScores: isArabic ? 'علامات المواد الأكاديمية' : 'Academic subject scores',
     sponsor: isArabic ? 'الراعي المالي' : 'Financial sponsor',
     sponsorIncome: isArabic ? 'الدخل السنوي للراعي' : 'Sponsor income',
+    sponsorDetails: isArabic ? 'تفاصيل الممولين ومهنهم' : 'Sponsor employment details',
     tuitionBudget: isArabic ? 'نطاق ميزانية الرسوم' : 'Tuition budget range',
     fundsAvailability: isArabic ? 'توفر الأموال' : 'Funds availability timeline',
     additionalInfo: isArabic ? 'معلومات إضافية' : 'Additional information',
@@ -79,9 +81,46 @@ function buildSectionRows(submission, isArabic, countryData) {
   pushRowIfPresent(academicRows, labels.lastDegreeDate, submission.last_degree_date || submission.lastDegreeDate)
   pushRowIfPresent(academicRows, labels.gapYears, submission.gap_years || submission.gapYears)
   pushRowIfPresent(academicRows, labels.studiedInEnglish, submission.studied_in_english_before || submission.studiedInEnglishBefore)
+  const subjectScores = parseObjectValue(
+    submission.academic_subjects
+      || submission.subject_scores
+      || countryData?._meta?.academic?.subject_scores,
+  )
+  const subjectScoreSummary = Object.entries(subjectScores)
+    .filter(([name, score]) => name && score !== null && score !== undefined && score !== '')
+    .map(([name, score]) => `${name}: ${score}/20`)
+    .join(' • ')
+  pushRowIfPresent(academicRows, labels.subjectScores, subjectScoreSummary)
 
   pushRowIfPresent(financialRows, labels.sponsor, submission.financial_sponsor || submission.sponsor || submission.financialSponsor)
   pushRowIfPresent(financialRows, labels.sponsorIncome, submission.sponsor_annual_income || submission.annualSponsorIncome || countryData?._meta?.financial?.annualSponsorIncome)
+  const financialMeta = countryData?._meta?.financial || {}
+  const sponsorProfiles = [
+    {
+      relationship: submission.financial_sponsor || submission.sponsor || submission.financialSponsor || financialMeta.sponsor,
+      annualIncome: submission.sponsor_annual_income || submission.annualSponsorIncome || financialMeta.annualSponsorIncome,
+      employmentStatus: financialMeta.sponsorEmploymentStatus,
+      workplace: financialMeta.sponsorWorkplace,
+      occupation: financialMeta.sponsorOccupation,
+    },
+    ...(Array.isArray(financialMeta.additionalSponsors) ? financialMeta.additionalSponsors : []),
+  ]
+  const sponsorDetails = sponsorProfiles
+    .map((sponsor, index) => {
+      const details = [
+        sponsor.name || sponsor.relationship || `${isArabic ? 'الممول' : 'Sponsor'} ${index + 1}`,
+        sponsor.relationship,
+        sponsor.employmentStatus,
+        sponsor.workplace,
+        sponsor.occupation,
+        sponsor.annualIncome,
+      ].filter(Boolean)
+
+      return details.join(' — ')
+    })
+    .filter(Boolean)
+    .join(' | ')
+  pushRowIfPresent(financialRows, labels.sponsorDetails, sponsorDetails)
   pushRowIfPresent(financialRows, labels.tuitionBudget, submission.budget_availability || submission.tuition_budget_range || submission.normalized_tuition_budget || submission.budget)
   pushRowIfPresent(financialRows, labels.fundsAvailability, submission.funds_availability_timeline || submission.fundsAvailabilityTimeline)
   pushRowIfPresent(financialRows, labels.additionalInfo, submission.additional_info || submission.additionalInfo)
@@ -558,7 +597,16 @@ export async function exportClientPdf(submission, language = 'en') {
   const dir = isArabic ? 'rtl' : 'ltr'
   const textAlign = isArabic ? 'right' : 'left'
   const countryData = parseObjectValue(submission.country_specific_data)
-  const recommendation = parseObjectValue(countryData?._meta?.recommendation)
+  const savedRecommendation = parseObjectValue(countryData?._meta?.recommendation)
+  const bestMatch = submission.best_match || savedRecommendation
+  const recommendation = bestMatch
+    ? {
+        ...savedRecommendation,
+        ...bestMatch,
+        university: bestMatch.university || bestMatch.cleanUniversityName || savedRecommendation.university,
+      }
+    : savedRecommendation
+  const fullMatchList = Array.isArray(submission.full_match_list) ? submission.full_match_list : []
   const academicChanceData = parseObjectValue(submission.agency_internal_score)
   const firstChanceEntry = Object.values(academicChanceData).find((entry) => entry && typeof entry === 'object' && entry.percentage !== undefined)
   const academicChanceValue = firstChanceEntry?.percentage !== undefined
@@ -597,6 +645,37 @@ export async function exportClientPdf(submission, language = 'en') {
   const reasonsList = cleanReasons.length > 0
     ? cleanReasons.map((reason) => `<li>${escapeHtml(reason)}</li>`).join('')
     : `<li>${escapeHtml(isArabic ? 'مطابقة عامة لمتطلبات القبول' : 'General match to admission requirements')}</li>`
+  const subjectScoreEntries = Object.entries(getLeadSubjectScores(submission))
+  const subjectScoresHtml = subjectScoreEntries.length > 0
+    ? `<div class="subject-score-grid">${subjectScoreEntries.map(([name, score]) => (
+        `<div class="subject-score-item"><strong>${escapeHtml(name)}:</strong> ${escapeHtml(String(score))}/20</div>`
+      )).join('')}</div>`
+    : `<p class="empty-note">${escapeHtml(isArabic ? 'لم يتم إدخال علامات المواد.' : 'No subject scores were provided.')}</p>`
+  const matchRows = [...fullMatchList]
+    .sort((a, b) => Number(b?.matchPercentage ?? 0) - Number(a?.matchPercentage ?? 0))
+    .slice(0, 5)
+    .map((match) => `
+      <tr>
+        <td>${escapeHtml(match.cleanUniversityName || match.university || match.original_university_string || '—')}</td>
+        <td>${escapeHtml(match.programName || match.program || 'General')}</td>
+        <td>${escapeHtml(match.country || '—')}</td>
+        <td>${escapeHtml(String(match.matchPercentage ?? match.recommendation_score ?? '—'))}%</td>
+      </tr>`)
+    .join('')
+  const matchResultsHtml = matchRows
+    ? `<table class="match-table">
+        <thead><tr>
+          <th>${escapeHtml(isArabic ? 'الجامعة' : 'University')}</th>
+          <th>${escapeHtml(isArabic ? 'البرنامج' : 'Program')}</th>
+          <th>${escapeHtml(isArabic ? 'الدولة' : 'Country')}</th>
+          <th>${escapeHtml(isArabic ? 'نسبة المطابقة' : 'Match')}</th>
+        </tr></thead>
+        <tbody>${matchRows}</tbody>
+      </table>`
+    : ''
+  const bestMatchSummary = bestMatch
+    ? `<p class="best-match"><strong>${escapeHtml(isArabic ? 'أفضل تطابق أولي' : 'Top Preliminary Match')}:</strong> ${escapeHtml(bestMatch.cleanUniversityName || bestMatch.university || bestMatch.original_university_string || '—')} — ${escapeHtml(String(bestMatch.matchPercentage ?? bestMatch.recommendation_score ?? '—'))}%</p>`
+    : ''
   const reportTitle = isFreeTier
     ? (isArabic ? 'تقرير الأهلية الأولي' : 'Preliminary Eligibility Report')
     : (isArabic ? 'تقرير تقييم استشاري وفاتورة خدمات' : 'Consulting Evaluation Report & Invoice')
@@ -647,6 +726,13 @@ export async function exportClientPdf(submission, language = 'en') {
     .invoice-box { border: 2px dashed #059669; background: #ecfdf5; padding: 9px; border-radius: 6px; display: flex; justify-content: space-between; align-items: center; font-size: 10.5px; margin-bottom: 13px; gap: 10px; }
     .invoice-box-free { border-color: #f97316; background: #fff7ed; color: #9a3412; }
     .invoice-stamp-free { color: #c2410c; font-weight: bold; font-size: 13px; border: 1px solid #c2410c; padding: 4px 12px; border-radius: 4px; }
+    .subject-score-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; margin: 8px 0 12px; }
+    .subject-score-item { border: 1px solid #dbeafe; border-radius: 5px; background: #f8fbff; padding: 7px; font-size: 10px; }
+    .empty-note { color: #64748b; font-size: 10px; margin: 8px 0; }
+    .best-match { border: 1px solid #bfdbfe; border-radius: 6px; background: #eff6ff; padding: 9px; font-size: 11px; }
+    .match-table { width: 100%; border-collapse: collapse; margin: 8px 0 12px; font-size: 9.5px; }
+    .match-table th, .match-table td { border: 1px solid #cbd5e1; padding: 6px; text-align: ${textAlign}; }
+    .match-table th { background: #eff6ff; color: #1e3a8a; }
     .promo-box { background: #e0f2fe; border-left: 4px solid #0284c7; padding: 10px; font-size: 11px; font-weight: bold; color: #0369a1; text-align: center; margin-bottom: 13px; }
     .disclaimer { font-size: 9px; color: #64748b; border-top: 1px solid #e2e8f0; padding-top: 8px; margin-top: 13px; line-height: 1.4; }
     .signature-area { margin-top: 22px; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 12px; font-size: 10.5px; font-weight: bold; }
@@ -702,6 +788,15 @@ export async function exportClientPdf(submission, language = 'en') {
       <div class="badge-label">${escapeHtml(isArabic ? 'نسبة نجاح الفيزا' : 'Visa Success Chance')}</div>
     </div>
   </div>
+
+  <div class="section-title">${escapeHtml(isArabic ? 'علامات المواد الأكاديمية' : 'Academic Subject Scores')}</div>
+  ${subjectScoresHtml}
+
+  ${fullMatchList.length > 0 ? `
+    <div class="section-title">${escapeHtml(isArabic ? 'نتائج مطابقة الجامعات الأولية' : 'Preliminary University Matches')}</div>
+    ${bestMatchSummary}
+    ${matchResultsHtml}
+  ` : bestMatchSummary}
 
   <div class="section-title">${escapeHtml(isArabic ? 'الجامعة الموصى بها' : 'Suggested University Match')}</div>
   <div class="exciting-box">

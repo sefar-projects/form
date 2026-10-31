@@ -1,6 +1,24 @@
-function StepFour({ values, onChange, onBack, onSubmit, error, errors = {}, isSubmitting, t }) {
+function StepFour({
+  values,
+  onChange,
+  additionalSponsors,
+  onAdditionalSponsorsChange,
+  onBack,
+  onSubmit,
+  error,
+  errors = {},
+  isSubmitting,
+  t,
+}) {
   const needsRelativesDetails = values.financialSponsor === 'Relatives'
   const needsFundExplanation = values.fundsAvailabilityTimeline === 'No'
+  const primarySponsorWorks = ['Business owner', 'Employee'].includes(values.sponsorEmploymentStatus)
+
+  const updateAdditionalSponsor = (index, field, value) => {
+    onAdditionalSponsorsChange((current) => current.map((sponsor, sponsorIndex) => (
+      sponsorIndex === index ? { ...sponsor, [field]: value } : sponsor
+    )))
+  }
 
   return (
     <div className="space-y-6">
@@ -67,6 +85,31 @@ function StepFour({ values, onChange, onBack, onSubmit, error, errors = {}, isSu
             {errors.sponsorEmploymentStatus ? <p className="mt-2 text-sm text-rose-500">{errors.sponsorEmploymentStatus}</p> : null}
           </label>
 
+          {primarySponsorWorks ? (
+            <>
+              <label className="block text-sm font-medium text-slate-700">
+                <span className="mb-2 block">{t.sponsorWorkplaceLabel}</span>
+                <input
+                  value={values.sponsorWorkplace}
+                  onChange={(event) => onChange('sponsorWorkplace', event.target.value)}
+                  className={`w-full rounded-xl border bg-white px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-sky-500 ${errors.sponsorWorkplace ? 'border-rose-400' : 'border-sky-100'}`}
+                  placeholder={t.sponsorWorkplacePlaceholder}
+                />
+                {errors.sponsorWorkplace ? <p className="mt-2 text-sm text-rose-500">{errors.sponsorWorkplace}</p> : null}
+              </label>
+              <label className="block text-sm font-medium text-slate-700">
+                <span className="mb-2 block">{t.sponsorOccupationLabel}</span>
+                <input
+                  value={values.sponsorOccupation}
+                  onChange={(event) => onChange('sponsorOccupation', event.target.value)}
+                  className={`w-full rounded-xl border bg-white px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-sky-500 ${errors.sponsorOccupation ? 'border-rose-400' : 'border-sky-100'}`}
+                  placeholder={t.sponsorOccupationPlaceholder}
+                />
+                {errors.sponsorOccupation ? <p className="mt-2 text-sm text-rose-500">{errors.sponsorOccupation}</p> : null}
+              </label>
+            </>
+          ) : null}
+
           <label className="block text-sm font-medium text-slate-700">
             <span className="mb-2 block">{t.tuitionBudgetRangeLabel}</span>
             <select
@@ -81,6 +124,118 @@ function StepFour({ values, onChange, onBack, onSubmit, error, errors = {}, isSu
             </select>
             {errors.tuitionBudgetRange ? <p className="mt-2 text-sm text-rose-500">{errors.tuitionBudgetRange}</p> : null}
           </label>
+        </div>
+
+        <div className="mt-6 border-t border-sky-100 pt-5">
+          <h4 className="text-sm font-semibold text-slate-800">{t.additionalSponsorsTitle}</h4>
+          <p className="mt-1 text-sm text-slate-600">{t.additionalSponsorsHint}</p>
+          <div className="mt-4 space-y-4">
+            {additionalSponsors.map((sponsor, index) => {
+              const sponsorWorks = ['Business owner', 'Employee'].includes(sponsor.employmentStatus)
+
+              return (
+                <div key={index} className="rounded-xl border border-sky-100 bg-white p-4">
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <h5 className="text-sm font-semibold text-slate-800">
+                      {t.additionalSponsorLabel} {index + 2}
+                    </h5>
+                    <button
+                      type="button"
+                      onClick={() => onAdditionalSponsorsChange((current) => current.filter((_, sponsorIndex) => sponsorIndex !== index))}
+                      className="text-sm font-semibold text-rose-600 hover:text-rose-700"
+                    >
+                      {t.removeSponsorButton}
+                    </button>
+                  </div>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <label className="block text-sm font-medium text-slate-700">
+                      <span className="mb-2 block">{t.additionalSponsorNameLabel}</span>
+                      <input
+                        value={sponsor.name}
+                        onChange={(event) => updateAdditionalSponsor(index, 'name', event.target.value)}
+                        className="w-full rounded-xl border border-sky-100 bg-white px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-sky-500"
+                      />
+                      {errors[`additionalSponsor.${index}.name`] ? <p className="mt-2 text-sm text-rose-500">{errors[`additionalSponsor.${index}.name`]}</p> : null}
+                    </label>
+                    <label className="block text-sm font-medium text-slate-700">
+                      <span className="mb-2 block">{t.sponsorLabel}</span>
+                      <select
+                        value={sponsor.relationship}
+                        onChange={(event) => updateAdditionalSponsor(index, 'relationship', event.target.value)}
+                        className="w-full rounded-xl border border-sky-100 bg-white px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-sky-500"
+                      >
+                        <option value="">{t.selectPlaceholder}</option>
+                        <option value="Self">{t.sponsorSelf}</option>
+                        <option value="Parents">{t.sponsorParents}</option>
+                        <option value="Relatives">{t.sponsorRelatives}</option>
+                      </select>
+                      {errors[`additionalSponsor.${index}.relationship`] ? <p className="mt-2 text-sm text-rose-500">{errors[`additionalSponsor.${index}.relationship`]}</p> : null}
+                    </label>
+                    <label className="block text-sm font-medium text-slate-700">
+                      <span className="mb-2 block">{t.annualIncomeLabel}</span>
+                      <input
+                        value={sponsor.annualIncome}
+                        onChange={(event) => updateAdditionalSponsor(index, 'annualIncome', event.target.value)}
+                        className="w-full rounded-xl border border-sky-100 bg-white px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-sky-500"
+                        placeholder={t.annualIncomePlaceholder}
+                      />
+                      {errors[`additionalSponsor.${index}.annualIncome`] ? <p className="mt-2 text-sm text-rose-500">{errors[`additionalSponsor.${index}.annualIncome`]}</p> : null}
+                    </label>
+                    <label className="block text-sm font-medium text-slate-700">
+                      <span className="mb-2 block">{t.employmentStatusLabel}</span>
+                      <select
+                        value={sponsor.employmentStatus}
+                        onChange={(event) => updateAdditionalSponsor(index, 'employmentStatus', event.target.value)}
+                        className="w-full rounded-xl border border-sky-100 bg-white px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-sky-500"
+                      >
+                        <option value="">{t.selectPlaceholder}</option>
+                        <option value="Business owner">{t.employmentBusinessOwner}</option>
+                        <option value="Employee">{t.employmentEmployee}</option>
+                        <option value="Unemployed">{t.employmentUnemployed}</option>
+                        <option value="Retired">{t.employmentRetired}</option>
+                        <option value="Student">{t.employmentStudent}</option>
+                      </select>
+                      {errors[`additionalSponsor.${index}.employmentStatus`] ? <p className="mt-2 text-sm text-rose-500">{errors[`additionalSponsor.${index}.employmentStatus`]}</p> : null}
+                    </label>
+                    {sponsorWorks ? (
+                      <>
+                        <label className="block text-sm font-medium text-slate-700">
+                          <span className="mb-2 block">{t.sponsorWorkplaceLabel}</span>
+                          <input
+                            value={sponsor.workplace}
+                            onChange={(event) => updateAdditionalSponsor(index, 'workplace', event.target.value)}
+                            className="w-full rounded-xl border border-sky-100 bg-white px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-sky-500"
+                            placeholder={t.sponsorWorkplacePlaceholder}
+                          />
+                          {errors[`additionalSponsor.${index}.workplace`] ? <p className="mt-2 text-sm text-rose-500">{errors[`additionalSponsor.${index}.workplace`]}</p> : null}
+                        </label>
+                        <label className="block text-sm font-medium text-slate-700">
+                          <span className="mb-2 block">{t.sponsorOccupationLabel}</span>
+                          <input
+                            value={sponsor.occupation}
+                            onChange={(event) => updateAdditionalSponsor(index, 'occupation', event.target.value)}
+                            className="w-full rounded-xl border border-sky-100 bg-white px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-sky-500"
+                            placeholder={t.sponsorOccupationPlaceholder}
+                          />
+                          {errors[`additionalSponsor.${index}.occupation`] ? <p className="mt-2 text-sm text-rose-500">{errors[`additionalSponsor.${index}.occupation`]}</p> : null}
+                        </label>
+                      </>
+                    ) : null}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+          <button
+            type="button"
+            onClick={() => onAdditionalSponsorsChange((current) => [
+              ...current,
+              { name: '', relationship: '', annualIncome: '', employmentStatus: '', workplace: '', occupation: '' },
+            ])}
+            className="mt-4 rounded-full border border-sky-200 px-4 py-2 text-sm font-semibold text-sky-700 transition hover:bg-sky-50"
+          >
+            + {t.addSponsorButton}
+          </button>
         </div>
 
         <label className="mt-4 block text-sm font-medium text-slate-700">
